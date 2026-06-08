@@ -1,0 +1,2 @@
+FROM test-base
+MIGRATE add_memory.sql

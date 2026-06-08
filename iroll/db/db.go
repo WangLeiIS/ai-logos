@@ -1,0 +1,268 @@
+package db
+
+import (
+	"database/sql"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"time"
+
+	_ "github.com/mattn/go-sqlite3"
+
+	"github.com/google/uuid"
+)
+
+type Page struct {
+	ID        int    `json:"id"`
+	PageID    string `json:"page_id"`
+	Cwd       string `json:"cwd"`
+	Context   string `json:"context"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
+}
+
+type Memory struct {
+	ID         int     `json:"id"`
+	Content    string  `json:"content"`
+	CreatedAt  string  `json:"created_at"`
+	Importance float64 `json:"importance"`
+}
+
+type Dna struct {
+	ID        int     `json:"id"`
+	Name      string  `json:"name"`
+	Type      string  `json:"type"`
+	Question  string  `json:"question"`
+	Answer    string  `json:"answer"`
+	Weight    float64 `json:"weight"`
+	CreatedAt string  `json:"created_at"`
+	UpdatedAt string  `json:"updated_at"`
+}
+
+func nowISO() string {
+	return time.Now().UTC().Format(time.RFC3339Nano)
+}
+
+func Open(dbPath string) (*sql.DB, error) {
+	return sql.Open("sqlite3", dbPath)
+}
+
+func InsertPage(db *sql.DB, cwd string) (*Page, error) {
+	var templateContext string
+	db.QueryRow("SELECT context FROM pages WHERE page_id = '0'").Scan(&templateContext)
+
+	pageID := uuid.New().String()
+	now := nowISO()
+
+	res, err := db.Exec(
+		"INSERT INTO pages (page_id, cwd, context, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+		pageID, cwd, templateContext, now, now,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("insert page: %w", err)
+	}
+
+	id, _ := res.LastInsertId()
+	return &Page{
+		ID:        int(id),
+		PageID:    pageID,
+		Cwd:       cwd,
+		Context:   templateContext,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}, nil
+}
+
+func ListPagesByCwd(db *sql.DB, cwd string) ([]Page, error) {
+	rows, err := db.Query(
+		"SELECT id, page_id, cwd, context, created_at, updated_at FROM pages WHERE cwd = ?",
+		cwd,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []Page
+	for rows.Next() {
+		var p Page
+		if err := rows.Scan(&p.ID, &p.PageID, &p.Cwd, &p.Context, &p.CreatedAt, &p.UpdatedAt); err != nil {
+			return nil, err
+		}
+		result = append(result, p)
+	}
+	return result, nil
+}
+
+func GetPageByPageID(db *sql.DB, pageID string) (*Page, error) {
+	var p Page
+	err := db.QueryRow(
+		"SELECT id, page_id, cwd, context, created_at, updated_at FROM pages WHERE page_id = ?",
+		pageID,
+	).Scan(&p.ID, &p.PageID, &p.Cwd, &p.Context, &p.CreatedAt, &p.UpdatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("page not found: %w", err)
+	}
+	return &p, nil
+}
+
+func UpdatePageContext(db *sql.DB, pageID string, context string) (*Page, error) {
+	now := nowISO()
+	_, err := db.Exec(
+		"UPDATE pages SET context = ?, updated_at = ? WHERE page_id = ?",
+		context, now, pageID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("update page: %w", err)
+	}
+	return GetPageByPageID(db, pageID)
+}
+
+func DeletePage(db *sql.DB, pageID string) error {
+	res, err := db.Exec("DELETE FROM pages WHERE page_id = ?", pageID)
+	if err != nil {
+		return fmt.Errorf("delete page: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("page '%s' not found", pageID)
+	}
+	return nil
+}
+
+func InsertMemory(db *sql.DB, content string, importance float64) (*Memory, error) {
+	now := nowISO()
+
+	res, err := db.Exec(
+		"INSERT INTO memory (content, created_at, importance) VALUES (?, ?, ?)",
+		content, now, importance,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("insert memory: %w", err)
+	}
+
+	id, _ := res.LastInsertId()
+	return &Memory{
+		ID:         int(id),
+		Content:    content,
+		CreatedAt:  now,
+		Importance: importance,
+	}, nil
+}
+
+// ResolveContext parses a raw context JSON string and resolves @file and @sql references.
+// irollPath is the root directory of the iroll package (e.g. ~/.iroll/my-agent/).
+// db is the opened ai_roll.db connection for SQL queries.
+func ResolveContext(rawContext string, irollPath string, db *sql.DB) (string, error) {
+	var raw map[string]interface{}
+	if err := json.Unmarshal([]byte(rawContext), &raw); err != nil {
+		// Not valid JSON, return as-is
+		return rawContext, nil
+	}
+
+	resolved := make(map[string]interface{}, len(raw))
+	for k, v := range raw {
+		resolved[k] = resolveValue(v, irollPath, db)
+	}
+
+	out, err := json.Marshal(resolved)
+	if err != nil {
+		return rawContext, nil
+	}
+	return string(out), nil
+}
+
+func resolveValue(v interface{}, irollPath string, db *sql.DB) interface{} {
+	obj, ok := v.(map[string]interface{})
+	if !ok {
+		return v
+	}
+
+	if filePath, exists := obj["@file"].(string); exists {
+		absPath := filepath.Join(irollPath, filePath)
+		data, err := os.ReadFile(absPath)
+		if err != nil {
+			return fmt.Sprintf("[file not found: %s]", filePath)
+		}
+		return string(data)
+	}
+
+	if query, exists := obj["@sql"].(string); exists {
+		return resolveSQL(db, query)
+	}
+
+	return v
+}
+
+func resolveSQL(db *sql.DB, query string) interface{} {
+	rows, err := db.Query(query)
+	if err != nil {
+		return fmt.Sprintf("[sql error: %s]", err.Error())
+	}
+	defer rows.Close()
+
+	columns, err := rows.Columns()
+	if err != nil {
+		return fmt.Sprintf("[sql error: %s]", err.Error())
+	}
+
+	if len(columns) == 1 {
+		var results []string
+		for rows.Next() {
+			var val string
+			if err := rows.Scan(&val); err != nil {
+				return fmt.Sprintf("[sql error: %s]", err.Error())
+			}
+			results = append(results, val)
+		}
+		if len(results) == 1 {
+			return results[0]
+		}
+		return results
+	}
+
+	var results []map[string]interface{}
+	for rows.Next() {
+		values := make([]interface{}, len(columns))
+		valuePtrs := make([]interface{}, len(columns))
+		for i := range values {
+			valuePtrs[i] = &values[i]
+		}
+		if err := rows.Scan(valuePtrs...); err != nil {
+			return fmt.Sprintf("[sql error: %s]", err.Error())
+		}
+		row := make(map[string]interface{}, len(columns))
+		for i, col := range columns {
+			row[col] = values[i]
+		}
+		results = append(results, row)
+	}
+	return results
+}
+
+func QueryDna(db *sql.DB, name string, dnaType string) ([]Dna, error) {
+	query := "SELECT id, name, type, question, answer, weight, created_at, updated_at FROM dna WHERE name LIKE ?"
+	args := []interface{}{"%" + name + "%"}
+	if dnaType != "" {
+		query += " AND type = ?"
+		args = append(args, dnaType)
+	}
+	query += " ORDER BY weight DESC"
+
+	rows, err := db.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query dna: %w", err)
+	}
+	defer rows.Close()
+
+	var result []Dna
+	for rows.Next() {
+		var d Dna
+		if err := rows.Scan(&d.ID, &d.Name, &d.Type, &d.Question, &d.Answer, &d.Weight, &d.CreatedAt, &d.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("query dna: %w", err)
+		}
+		result = append(result, d)
+	}
+	return result, nil
+}
