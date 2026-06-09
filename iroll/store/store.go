@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"logos/safepath"
+
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -15,12 +17,19 @@ func HomeDir() string {
 	return filepath.Join(home, ".iroll")
 }
 
-func IrollPath(name string) string {
-	return filepath.Join(HomeDir(), name)
+func IrollPath(name string) (string, error) {
+	if err := safepath.ValidateName(name); err != nil {
+		return "", err
+	}
+	return safepath.Join(HomeDir(), name)
 }
 
-func DbPath(name string) string {
-	return filepath.Join(IrollPath(name), "ai_roll.db")
+func DbPath(name string) (string, error) {
+	root, err := IrollPath(name)
+	if err != nil {
+		return "", err
+	}
+	return safepath.Join(root, "ai_roll.db")
 }
 
 // ReadName reads the name value from metadata table inside ai_roll.db within a ZIP file
@@ -77,7 +86,10 @@ func ReadName(zipPath string) (string, error) {
 
 // Extract extracts a .iroll ZIP to ~/.iroll/<name>/
 func Extract(zipPath string, name string) error {
-	dest := IrollPath(name)
+	dest, err := IrollPath(name)
+	if err != nil {
+		return err
+	}
 	if _, err := os.Stat(dest); err == nil {
 		return fmt.Errorf("iroll '%s' already exists", name)
 	}
@@ -88,10 +100,21 @@ func Extract(zipPath string, name string) error {
 	}
 	defer r.Close()
 
-	os.MkdirAll(dest, 0755)
+	paths := make(map[*zip.File]string, len(r.File))
+	for _, f := range r.File {
+		outPath, err := safepath.Join(dest, f.Name)
+		if err != nil {
+			return fmt.Errorf("invalid zip entry %q: %w", f.Name, err)
+		}
+		paths[f] = outPath
+	}
+
+	if err := os.MkdirAll(dest, 0755); err != nil {
+		return err
+	}
 
 	for _, f := range r.File {
-		outPath := filepath.Join(dest, f.Name)
+		outPath := paths[f]
 
 		if f.FileInfo().IsDir() {
 			os.MkdirAll(outPath, 0755)

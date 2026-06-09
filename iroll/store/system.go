@@ -166,7 +166,11 @@ func DeletePage(pageID string) error {
 	sdb.Exec("DELETE FROM active_page WHERE page_id = ?", pageID)
 
 	// Delete from iroll's pages table
-	conn, err := sql.Open("sqlite3", DbPath(irollName))
+	dbPath, err := DbPath(irollName)
+	if err != nil {
+		return err
+	}
+	conn, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		return err
 	}

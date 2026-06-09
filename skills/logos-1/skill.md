@@ -141,7 +141,7 @@ logos page delete <page-id>
 - **template page** — page_id=0 stores the default context; new pages inherit from it
 - **active page** — each working directory tracks its own active page via system.db
 - **dna** — decision-making Q&A pairs defining agent behavior. Context loads questions only (no answers); use `query-dna` to retrieve full records on demand
-- **heartbeat** — todo/task list with two types: `once` (one-time, pending→done) and `periodic` (recurring, always active with executed_count). Agent checks pending tasks at conversation start
+- **loop** — operational task list defining agent's run patterns. Two types: `once` (pending→done) and `periodic` (always active with executed_count). Each loop has a name, description, and full content instruction
 - **memory** — timestamped records with importance scores, stored per iroll
 
 When `get-context` or `page new` returns context, `@file` and `@sql` references are already resolved to actual values. When `update-context` writes context, it stores raw JSON with markers — resolution happens at read time.

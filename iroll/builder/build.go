@@ -11,7 +11,9 @@ import (
 	"path/filepath"
 	"time"
 
+	"logos/book"
 	"logos/db"
+	"logos/safepath"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -31,6 +33,10 @@ type BuildResult struct {
 }
 
 func Build(lf *Layerfile, tagName string) (*BuildResult, error) {
+	if err := safepath.ValidateName(tagName); err != nil {
+		return nil, err
+	}
+
 	tmpDir, err := os.MkdirTemp("", "iroll-build-*")
 	if err != nil {
 		return nil, err
@@ -66,17 +72,24 @@ func Build(lf *Layerfile, tagName string) (*BuildResult, error) {
 		}
 	}
 
-	// Ensure ai_roll.db exists
 	dbPath := filepath.Join(tmpDir, "ai_roll.db")
-	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
-		conn, err := sql.Open("sqlite3", dbPath)
-		if err != nil {
-			return nil, err
-		}
-		conn.Close()
+	bundles, err := book.Discover(tmpDir)
+	if err != nil {
+		return nil, fmt.Errorf("validate books: %w", err)
+	}
+	conn, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		return nil, err
+	}
+	if err := db.SyncBooks(conn, bundles); err != nil {
+		_ = conn.Close()
+		return nil, fmt.Errorf("sync books: %w", err)
+	}
+	if err := checkpointAndCloseSQLite(conn); err != nil {
+		return nil, fmt.Errorf("persist books: %w", err)
 	}
 
-	// Compute layer hash
+	// The layer hash covers content state only; layer.json and history are build metadata added afterward.
 	layerID, err := computeDirHash(tmpDir)
 	if err != nil {
 		return nil, err
@@ -97,24 +110,31 @@ func Build(lf *Layerfile, tagName string) (*BuildResult, error) {
 	}
 
 	// Record history
-	conn, err := sql.Open("sqlite3", dbPath)
+	conn, err = sql.Open("sqlite3", dbPath)
 	if err != nil {
 		return nil, err
 	}
-	defer conn.Close()
-
 	if err := db.EnsureHistoryTable(conn); err != nil {
+		_ = conn.Close()
 		return nil, err
 	}
 
 	instrSummary, _ := json.Marshal(lf.Instructions)
 	if err := db.InsertHistory(conn, parentLayerID, lj.Description, layerID, string(instrSummary)); err != nil {
+		_ = conn.Close()
 		return nil, err
+	}
+	if err := checkpointAndCloseSQLite(conn); err != nil {
+		return nil, fmt.Errorf("persist build database: %w", err)
 	}
 
 	// Copy to ~/.iroll/<name>/
 	home, _ := os.UserHomeDir()
-	dest := filepath.Join(home, ".iroll", tagName)
+	storeRoot := filepath.Join(home, ".iroll")
+	dest, err := safepath.Join(storeRoot, tagName)
+	if err != nil {
+		return nil, err
+	}
 	if _, err := os.Stat(dest); err == nil {
 		return nil, fmt.Errorf("iroll '%s' already exists", tagName)
 	}
@@ -129,9 +149,38 @@ func Build(lf *Layerfile, tagName string) (*BuildResult, error) {
 	}, nil
 }
 
+func checkpointSQLite(conn *sql.DB) error {
+	var busy, logFrames, checkpointedFrames int
+	if err := conn.QueryRow("PRAGMA wal_checkpoint(TRUNCATE)").Scan(&busy, &logFrames, &checkpointedFrames); err != nil {
+		return err
+	}
+	if busy != 0 {
+		return fmt.Errorf("WAL checkpoint busy with %d log frames and %d checkpointed frames", logFrames, checkpointedFrames)
+	}
+	return nil
+}
+
+func checkpointAndCloseSQLite(conn *sql.DB) error {
+	checkpointErr := checkpointSQLite(conn)
+	closeErr := conn.Close()
+	if checkpointErr != nil {
+		if closeErr != nil {
+			return fmt.Errorf("checkpoint: %v; close: %w", checkpointErr, closeErr)
+		}
+		return checkpointErr
+	}
+	return closeErr
+}
+
 func processFrom(tmpDir string, baseName string) (string, error) {
+	if err := safepath.ValidateName(baseName); err != nil {
+		return "", err
+	}
 	home, _ := os.UserHomeDir()
-	src := filepath.Join(home, ".iroll", baseName)
+	src, err := safepath.Join(filepath.Join(home, ".iroll"), baseName)
+	if err != nil {
+		return "", err
+	}
 	if _, err := os.Stat(src); os.IsNotExist(err) {
 		return "", fmt.Errorf("base iroll '%s' not found in ~/.iroll/", baseName)
 	}
@@ -151,7 +200,10 @@ func processFrom(tmpDir string, baseName string) (string, error) {
 }
 
 func processMigrate(tmpDir string, lfDir string, sqlFile string) error {
-	sqlPath := filepath.Join(lfDir, sqlFile)
+	sqlPath, err := safepath.Join(lfDir, sqlFile)
+	if err != nil {
+		return err
+	}
 	if _, err := os.Stat(sqlPath); os.IsNotExist(err) {
 		return fmt.Errorf("sql file not found: %s", sqlPath)
 	}
@@ -167,13 +219,21 @@ func processMigrate(tmpDir string, lfDir string, sqlFile string) error {
 }
 
 func processCopy(tmpDir string, lfDir string, src string, dest string) error {
-	srcPath := filepath.Join(lfDir, src)
+	srcPath, err := safepath.Join(lfDir, src)
+	if err != nil {
+		return err
+	}
 	if _, err := os.Stat(srcPath); os.IsNotExist(err) {
 		return fmt.Errorf("source not found: %s", src)
 	}
 
-	destPath := filepath.Join(tmpDir, dest)
-	os.MkdirAll(filepath.Dir(destPath), 0755)
+	destPath, err := safepath.Join(tmpDir, dest)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
+		return err
+	}
 
 	return copyDir(srcPath, destPath)
 }

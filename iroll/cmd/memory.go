@@ -30,7 +30,7 @@ var addMemoryCmd = &cobra.Command{
 			}
 		}
 
-		conn, err := db.Open(store.DbPath(name))
+		conn, err := db.Open(checkedDbPath(name))
 		if err != nil {
 			outputError(err.Error())
 		}

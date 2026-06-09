@@ -5,8 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"time"
+
+	"logos/safepath"
 
 	_ "github.com/mattn/go-sqlite3"
 
@@ -163,7 +164,11 @@ func ResolveContext(rawContext string, irollPath string, db *sql.DB) (string, er
 
 	resolved := make(map[string]interface{}, len(raw))
 	for k, v := range raw {
-		resolved[k] = resolveValue(v, irollPath, db)
+		value, err := resolveValue(v, irollPath, db)
+		if err != nil {
+			return "", err
+		}
+		resolved[k] = value
 	}
 
 	out, err := json.Marshal(resolved)
@@ -173,26 +178,29 @@ func ResolveContext(rawContext string, irollPath string, db *sql.DB) (string, er
 	return string(out), nil
 }
 
-func resolveValue(v interface{}, irollPath string, db *sql.DB) interface{} {
+func resolveValue(v interface{}, irollPath string, db *sql.DB) (interface{}, error) {
 	obj, ok := v.(map[string]interface{})
 	if !ok {
-		return v
+		return v, nil
 	}
 
 	if filePath, exists := obj["@file"].(string); exists {
-		absPath := filepath.Join(irollPath, filePath)
+		absPath, err := safepath.Join(irollPath, filePath)
+		if err != nil {
+			return nil, err
+		}
 		data, err := os.ReadFile(absPath)
 		if err != nil {
-			return fmt.Sprintf("[file not found: %s]", filePath)
+			return fmt.Sprintf("[file not found: %s]", filePath), nil
 		}
-		return string(data)
+		return string(data), nil
 	}
 
 	if query, exists := obj["@sql"].(string); exists {
-		return resolveSQL(db, query)
+		return resolveSQL(db, query), nil
 	}
 
-	return v
+	return v, nil
 }
 
 func resolveSQL(db *sql.DB, query string) interface{} {

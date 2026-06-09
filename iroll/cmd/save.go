@@ -6,8 +6,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"logos/store"
-
 	"github.com/spf13/cobra"
 )
 
@@ -19,7 +17,7 @@ var saveCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		name := args[0]
-		srcDir := store.IrollPath(name)
+		srcDir := checkedIrollPath(name)
 
 		if _, err := os.Stat(srcDir); os.IsNotExist(err) {
 			outputError("iroll '" + name + "' not found")
@@ -35,8 +33,8 @@ var saveCmd = &cobra.Command{
 
 		absPath, _ := filepath.Abs(saveOutput)
 		outputJSON(map[string]string{
-			"name":   name,
-			"saved":  absPath,
+			"name":  name,
+			"saved": absPath,
 		})
 	},
 }

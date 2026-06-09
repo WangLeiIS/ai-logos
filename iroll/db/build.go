@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"logos/safepath"
 )
 
 type HistoryEntry struct {
@@ -116,8 +118,18 @@ func QueryAllMetadata(db *sql.DB) (map[string]string, error) {
 }
 
 func ListResources(name string) ([]string, error) {
+	if err := safepath.ValidateName(name); err != nil {
+		return nil, err
+	}
 	home, _ := os.UserHomeDir()
-	resDir := filepath.Join(home, ".iroll", name, "Resources")
+	irollDir, err := safepath.Join(filepath.Join(home, ".iroll"), name)
+	if err != nil {
+		return nil, err
+	}
+	resDir, err := safepath.Join(irollDir, "Resources")
+	if err != nil {
+		return nil, err
+	}
 	var files []string
 	filepath.Walk(resDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() {

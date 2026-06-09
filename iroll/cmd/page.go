@@ -26,7 +26,7 @@ var pageCurrentCmd = &cobra.Command{
 			outputError(err.Error())
 		}
 
-		conn, err := db.Open(store.DbPath(irollName))
+		conn, err := db.Open(checkedDbPath(irollName))
 		if err != nil {
 			outputError(err.Error())
 		}
@@ -73,7 +73,7 @@ var pageListCmd = &cobra.Command{
 		}
 
 		name := args[0]
-		conn, err := db.Open(store.DbPath(name))
+		conn, err := db.Open(checkedDbPath(name))
 		if err != nil {
 			outputError(err.Error())
 		}
@@ -102,7 +102,7 @@ var pageNewCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		name := args[0]
 		cwd, _ := filepath.Abs(pageNewCwd)
-		conn, err := db.Open(store.DbPath(name))
+		conn, err := db.Open(checkedDbPath(name))
 		if err != nil {
 			outputError(err.Error())
 		}
@@ -117,7 +117,10 @@ var pageNewCmd = &cobra.Command{
 			outputError(err.Error())
 		}
 
-		p.Context, _ = db.ResolveContext(p.Context, store.IrollPath(name), conn)
+		p.Context, err = db.ResolveContext(p.Context, checkedIrollPath(name), conn)
+		if err != nil {
+			outputError(err.Error())
+		}
 
 		outputJSON(p)
 	},

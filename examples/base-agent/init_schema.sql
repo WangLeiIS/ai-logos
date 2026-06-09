@@ -21,9 +21,11 @@ CREATE TABLE dna (
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
-CREATE TABLE heartbeat (
+CREATE TABLE loop (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     type TEXT NOT NULL,
+    name TEXT NOT NULL,
+    describe TEXT NOT NULL,
     content TEXT NOT NULL,
     status TEXT NOT NULL,
     executed_count INTEGER DEFAULT 0,

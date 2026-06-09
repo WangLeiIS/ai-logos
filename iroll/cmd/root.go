@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 
+	"logos/store"
+
 	"github.com/spf13/cobra"
 )
 
@@ -31,4 +33,20 @@ func outputError(msg string) {
 	b, _ := json.Marshal(map[string]string{"error": msg})
 	fmt.Fprintln(os.Stderr, string(b))
 	os.Exit(1)
+}
+
+func checkedIrollPath(name string) string {
+	path, err := store.IrollPath(name)
+	if err != nil {
+		outputError(err.Error())
+	}
+	return path
+}
+
+func checkedDbPath(name string) string {
+	path, err := store.DbPath(name)
+	if err != nil {
+		outputError(err.Error())
+	}
+	return path
 }

@@ -22,7 +22,7 @@ var getContextCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		cwd, _ := filepath.Abs(getContextCwd)
 		name, pageID := resolvePage(args, getContextPage, cwd)
-		conn, err := db.Open(store.DbPath(name))
+		conn, err := db.Open(checkedDbPath(name))
 		if err != nil {
 			outputError(err.Error())
 		}
@@ -33,7 +33,10 @@ var getContextCmd = &cobra.Command{
 			outputError(err.Error())
 		}
 
-		p.Context, _ = db.ResolveContext(p.Context, store.IrollPath(name), conn)
+		p.Context, err = db.ResolveContext(p.Context, checkedIrollPath(name), conn)
+		if err != nil {
+			outputError(err.Error())
+		}
 
 		outputJSON(p)
 	},
@@ -46,7 +49,7 @@ var updateContextCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		cwd, _ := filepath.Abs(updateContextCwd)
 		name, pageID := resolvePage(args, updateContextPage, cwd)
-		conn, err := db.Open(store.DbPath(name))
+		conn, err := db.Open(checkedDbPath(name))
 		if err != nil {
 			outputError(err.Error())
 		}

@@ -29,7 +29,7 @@ agent.iroll (ZIP)
 |----|------|------|
 | metadata | 是 | key-value 元数据（name, version, description 等） |
 | dna | 否 | agent 的决策 DNA，Q&A 对定义底层决策机制 |
-| heartbeat | 否 | 待办任务表，记录一次性任务和周期任务 |
+| loop | 否 | 循环任务表，定义 agent 的运行模式（once/periodic） |
 
 **metadata 表结构：**
 
@@ -54,13 +54,15 @@ agent.iroll (ZIP)
 | created_at | TEXT | NOT NULL | 创建时间 |
 | updated_at | TEXT | NOT NULL | 更新时间 |
 
-**heartbeat 表结构：**
+**loop 表结构：**
 
 | 字段 | 类型 | 约束 | 说明 |
 |------|------|------|------|
 | id | INTEGER | PRIMARY KEY AUTOINCREMENT | 主键 |
 | type | TEXT | NOT NULL | 任务类型：`once`（一次性）/ `periodic`（周期） |
-| content | TEXT | NOT NULL | 任务描述，纯文本 |
+| name | TEXT | NOT NULL | 短标识，如 `self-cognition` |
+| describe | TEXT | NOT NULL | 简短描述，如 "自我认知" |
+| content | TEXT | NOT NULL | 完整任务指令 |
 | status | TEXT | NOT NULL | once: `pending` / `done`；periodic: 始终 `active` |
 | executed_count | INTEGER | DEFAULT 0 | 执行次数计数器 |
 | result | TEXT | DEFAULT '' | 执行结果，periodic 每次覆盖 |
@@ -232,11 +234,11 @@ agent.iroll (ZIP)
 - [x] 分层构建（FROM / MIGRATE / COPY）
 - [x] 构建历史追踪
 - [x] dna 表（决策 DNA：认知观/伦理观/审美观/本体观）
-- [x] heartbeat 表（待办任务：一次性/周期）
+- [x] loop 表（循环任务：一次性/周期）
 
 ### 待做
 
-- [ ] heartbeat 命令行支持（list/finish/add）
+- [ ] loop 命令行支持（list/finish/add）
 - [ ] 遗忘表定义
 - [ ] book 表 + Resources/books/ 知识检索
 - [ ] skill 表 + Resources/skills/ 技能管理
@@ -244,9 +246,5 @@ agent.iroll (ZIP)
 - [ ] 基础信息获取完善
 - [ ] engine（心跳）机制
 - [ ] 前端界面
-- [ ] 斜杠命令
+- [ ] 斜杠命令表
 
-
-
-接下来去做 心跳。心跳就是一个todo代办表
-任务分为两种类型，一次性任务和周期任务

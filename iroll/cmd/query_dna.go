@@ -25,7 +25,7 @@ var queryDnaCmd = &cobra.Command{
 			outputError(err.Error())
 		}
 
-		conn, err := db.Open(store.DbPath(irollName))
+		conn, err := db.Open(checkedDbPath(irollName))
 		if err != nil {
 			outputError(err.Error())
 		}

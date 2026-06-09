@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"logos/db"
-	"logos/store"
 
 	"github.com/spf13/cobra"
 )
@@ -13,7 +12,7 @@ var inspectCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		name := args[0]
-		conn, err := db.Open(store.DbPath(name))
+		conn, err := db.Open(checkedDbPath(name))
 		if err != nil {
 			outputError(err.Error())
 		}

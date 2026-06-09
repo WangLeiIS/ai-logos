@@ -22,3 +22,5 @@ Desktop.ini
 .DS_Store
 
 
+.tmp
+examples/base-agent/books/*/images

@@ -24,7 +24,7 @@ var loadCmd = &cobra.Command{
 
 		outputJSON(map[string]string{
 			"name": name,
-			"path": store.IrollPath(name),
+			"path": checkedIrollPath(name),
 		})
 	},
 }
