@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace the old global todo-style loop table with reusable loop seeds, page-independent loop runs, dynamic loop context injection, and CLI commands for seed and run lifecycle management.
+**Goal:** Define reusable loop seeds and page-independent loop runs in the base-agent schema, then add dynamic loop context injection and CLI commands for seed and run lifecycle management.
 
-**Architecture:** The `db` package owns schema migration, seed CRUD, run lifecycle rules, aggregate views, and dynamic context construction. The `cmd` package exposes thin Cobra commands that resolve the active page and delegate to `db`. Raw `pages.context` never stores loop runtime state; `ResolveContext` injects a reserved `loop` view from `loop` and `loop_runs`.
+**Architecture:** The base-agent SQL defines the complete Loop schema; runtime code assumes a roll already has that schema and performs no compatibility migration. The `db` package owns seed CRUD, run lifecycle rules, aggregate views, and dynamic context construction. The `cmd` package exposes thin Cobra commands that resolve the active page and delegate to `db`. Raw `pages.context` never stores loop runtime state; `ResolveContext` injects a reserved `loop` view from `loop` and `loop_runs`.
 
 **Tech Stack:** Go 1.24, Cobra, SQLite/go-sqlite3, standard `encoding/json`, existing Logos page/store patterns
 
@@ -15,7 +15,6 @@
 Create focused database files rather than expanding the already broad `db/db.go`:
 
 - `iroll/db/loop_types.go` — public loop seed/run/context types and JSON-or-text normalization.
-- `iroll/db/loop_schema.go` — idempotent schema creation and migration from the existing todo-style `loop` table.
 - `iroll/db/loop_seed.go` — seed CRUD, archive/restore, deletion rules, and aggregate seed listing.
 - `iroll/db/loop_run.go` — run creation, updates, lifecycle transitions, history, reflection, and page cleanup.
 - `iroll/db/loop_context.go` — constructs the dynamic `loop.focus` and `loop.available` context view.
@@ -31,24 +30,37 @@ Modify:
 - `examples/base-agent/init_schema.sql` and `examples/base-agent/init_data.sql` — build new rolls with the new schema and seed shape.
 - `README.md`, `docs/rebot-roll.md`, and `skills/logos-1/skill.md` — document the approved behavior and commands.
 
-## Task 1: Add Loop Schema and Migrate Existing Rolls
+## Task 1: Define the Loop Schema in Base Agent
 
 **Files:**
-- Create: `iroll/db/loop_schema.go`
-- Create: `iroll/db/loop_schema_test.go`
 - Modify: `examples/base-agent/init_schema.sql`
 - Modify: `examples/base-agent/init_data.sql`
+- Modify: `iroll/builder/build_test.go`
 
-- [ ] **Step 1: Write failing schema creation and migration tests**
+- [ ] **Step 1: Write a failing base-agent build schema test**
 
-Create tests that verify a fresh database receives both tables and indexes, and that the existing loop schema migrates while preserving seed identity fields:
+Add a builder test that builds `examples/base-agent/Layerfile` and verifies the resulting database contains the exact Loop tables and indexes:
 
 ```go
-func TestEnsureLoopSchemaCreatesCurrentSchema(t *testing.T) {
-	conn := openLoopTestDB(t)
-	if err := EnsureLoopSchema(conn); err != nil {
+func TestBuildBaseAgentContainsLoopSchema(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+
+	layerfile, err := ParseLayerfile(filepath.Join("..", "..", "examples", "base-agent", "Layerfile"))
+	if err != nil {
 		t.Fatal(err)
 	}
+	result, err := Build(layerfile, "loop-schema-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn, err := sql.Open("sqlite3", filepath.Join(result.Path, "ai_roll.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+
 	assertTableColumns(t, conn, "loop", []string{
 		"id", "name", "describe", "content", "weight", "archived_at", "created_at", "updated_at",
 	})
@@ -58,89 +70,64 @@ func TestEnsureLoopSchemaCreatesCurrentSchema(t *testing.T) {
 		"status", "plan", "progress", "result", "reflection", "abort_reason",
 		"started_at", "ended_at", "reflected_at", "updated_at",
 	})
+	assertIndexExists(t, conn, "idx_loop_runs_page_status")
+	assertIndexExists(t, conn, "idx_loop_runs_parent_status")
+	assertIndexExists(t, conn, "idx_loop_runs_loop_started")
+	assertIndexExists(t, conn, "idx_loop_runs_one_active_main")
 }
 
-func TestEnsureLoopSchemaMigratesLegacyLoopSeeds(t *testing.T) {
-	conn := openLoopTestDB(t)
-	_, err := conn.Exec(`
-		CREATE TABLE loop (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			type TEXT NOT NULL,
-			name TEXT NOT NULL,
-			describe TEXT NOT NULL,
-			content TEXT NOT NULL,
-			status TEXT NOT NULL,
-			executed_count INTEGER DEFAULT 0,
-			result TEXT DEFAULT '',
-			weight REAL DEFAULT 0.5,
-			created_at TEXT NOT NULL,
-			updated_at TEXT NOT NULL
-		);
-		INSERT INTO loop VALUES (
-			7, 'once', 'self-cognition', '自我认知', 'Read context',
-			'pending', 3, 'old result', 0.9, 'created', 'updated'
-		);
-	`)
+func assertTableColumns(t *testing.T, conn *sql.DB, table string, want []string) {
+	t.Helper()
+	rows, err := conn.Query(`PRAGMA table_info(` + table + `)`)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer rows.Close()
+	var got []string
+	for rows.Next() {
+		var cid, notNull, pk int
+		var name, columnType string
+		var defaultValue any
+		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &pk); err != nil {
+			t.Fatal(err)
+		}
+		got = append(got, name)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("%s columns = %#v, want %#v", table, got, want)
+	}
+}
 
-	if err := EnsureLoopSchema(conn); err != nil {
+func assertIndexExists(t *testing.T, conn *sql.DB, name string) {
+	t.Helper()
+	var count int
+	if err := conn.QueryRow(
+		`SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = ?`, name,
+	).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
-	var id int64
-	var name, describe, content string
-	var weight float64
-	if err := conn.QueryRow(`SELECT id, name, describe, content, weight FROM loop`).Scan(
-		&id, &name, &describe, &content, &weight,
-	); err != nil {
-		t.Fatal(err)
-	}
-	if id != 7 || name != "self-cognition" || describe != "自我认知" ||
-		content != "Read context" || weight != 0.9 {
-		t.Fatalf("migrated seed = %d %q %q %q %v", id, name, describe, content, weight)
+	if count != 1 {
+		t.Fatalf("index %q does not exist", name)
 	}
 }
 ```
 
-- [ ] **Step 2: Run the schema tests to verify they fail**
+Add `reflect` to the existing builder test imports.
+
+- [ ] **Step 2: Run the builder test to verify it fails**
 
 Run:
 
 ```bash
 cd iroll
-go test ./db -run 'TestEnsureLoopSchema' -v
+go test ./builder -run TestBuildBaseAgentContainsLoopSchema -v
 ```
 
-Expected: FAIL because `EnsureLoopSchema` and the test helpers do not exist.
+Expected: FAIL because the base-agent SQL still defines the old Loop table and no `loop_runs` table.
 
-- [ ] **Step 3: Implement idempotent schema creation and legacy migration**
+- [ ] **Step 3: Replace the base-agent Loop schema**
 
-Implement:
-
-```go
-func EnsureLoopSchema(conn *sql.DB) error
-```
-
-Use one transaction:
-
-1. Read `PRAGMA table_info(loop)`.
-2. If `loop` does not exist, create the approved seed table.
-3. If `loop` exists without `archived_at`, rename it to `loop_legacy`, create the new table, copy `id/name/describe/content/weight/created_at/updated_at`, then drop `loop_legacy`.
-4. Create `loop_runs` and all approved indexes with `IF NOT EXISTS`.
-5. Commit only after every statement succeeds.
-
-Use these exact migration statements after creating the replacement `loop` table:
-
-```sql
-INSERT INTO loop (id, name, describe, content, weight, archived_at, created_at, updated_at)
-SELECT id, name, describe, content, weight, NULL, created_at, updated_at
-FROM loop_legacy;
-
-DROP TABLE loop_legacy;
-```
-
-Use these exact schema statements:
+Replace the existing Loop definition in `examples/base-agent/init_schema.sql` with these exact statements:
 
 ```sql
 CREATE TABLE loop (
@@ -154,7 +141,7 @@ CREATE TABLE loop (
     updated_at TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS loop_runs (
+CREATE TABLE loop_runs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     loop_id INTEGER NOT NULL,
     page_id TEXT NOT NULL,
@@ -177,23 +164,23 @@ CREATE TABLE IF NOT EXISTS loop_runs (
     FOREIGN KEY (parent_run_id) REFERENCES loop_runs(id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_loop_runs_page_status
+CREATE INDEX idx_loop_runs_page_status
 ON loop_runs(page_id, status);
 
-CREATE INDEX IF NOT EXISTS idx_loop_runs_parent_status
+CREATE INDEX idx_loop_runs_parent_status
 ON loop_runs(parent_run_id, status);
 
-CREATE INDEX IF NOT EXISTS idx_loop_runs_loop_started
+CREATE INDEX idx_loop_runs_loop_started
 ON loop_runs(loop_id, started_at DESC);
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_loop_runs_one_active_main
+CREATE UNIQUE INDEX idx_loop_runs_one_active_main
 ON loop_runs(page_id)
 WHERE status = 'active' AND parent_run_id IS NULL;
 ```
 
-- [ ] **Step 4: Update the base-agent SQL**
+- [ ] **Step 4: Replace the base-agent seed data**
 
-Replace the old `loop` definition in `examples/base-agent/init_schema.sql` with the approved `loop` and `loop_runs` schema and indexes. Replace legacy seed inserts in `init_data.sql` with:
+Replace the existing Loop inserts in `examples/base-agent/init_data.sql` with:
 
 ```sql
 INSERT INTO loop (name, describe, content, weight, archived_at, created_at, updated_at) VALUES
@@ -201,13 +188,13 @@ INSERT INTO loop (name, describe, content, weight, archived_at, created_at, upda
     ('daily-check', '日常检查', '检查 dna 和 memory，决定当前需要关注的事项', 0.8, NULL, datetime('now'), datetime('now'));
 ```
 
-- [ ] **Step 5: Run schema tests**
+- [ ] **Step 5: Run the builder test**
 
 Run:
 
 ```bash
 cd iroll
-go test ./db -run 'TestEnsureLoopSchema' -v
+go test ./builder -run TestBuildBaseAgentContainsLoopSchema -v
 ```
 
 Expected: PASS.
@@ -215,7 +202,7 @@ Expected: PASS.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add iroll/db/loop_schema.go iroll/db/loop_schema_test.go examples/base-agent/init_schema.sql examples/base-agent/init_data.sql
+git add examples/base-agent/init_schema.sql examples/base-agent/init_data.sql iroll/builder/build_test.go
 git commit -m "feat: add loop seed and run schema"
 ```
 
@@ -242,7 +229,7 @@ func TestNormalizeLoopJSONPreservesJSONAndWrapsText(t *testing.T) {
 
 func TestLoopSeedLifecycle(t *testing.T) {
 	conn := openLoopTestDB(t)
-	mustEnsureLoopSchema(t, conn)
+	applyLoopTestSchema(t, conn)
 	seed, err := InsertLoopSeed(conn, "review", "Review memory", "Inspect useful memories", 0.8)
 	if err != nil {
 		t.Fatal(err)
@@ -267,9 +254,31 @@ func TestLoopSeedLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func openLoopTestDB(t *testing.T) *sql.DB {
+	t.Helper()
+	conn, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn.SetMaxOpenConns(1)
+	t.Cleanup(func() { conn.Close() })
+	return conn
+}
+
+func applyLoopTestSchema(t *testing.T, conn *sql.DB) {
+	t.Helper()
+	schema, err := os.ReadFile(filepath.Join("..", "..", "examples", "base-agent", "init_schema.sql"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.Exec(string(schema)); err != nil {
+		t.Fatal(err)
+	}
+}
 ```
 
-Also test duplicate names, blank name/describe/content, weight outside `0..1`, and refusal to remove a seed after a run exists. For the removal-history test, insert a valid `loop_runs` row directly in SQL using the seed snapshot fields; `StartLoopRun` is introduced in Task 3.
+Import `database/sql`, `os`, and `path/filepath` in the test. Also test duplicate names, blank name/describe/content, weight outside `0..1`, and refusal to remove a seed after a run exists. For the removal-history test, insert a valid `loop_runs` row directly in SQL using the seed snapshot fields; `StartLoopRun` is introduced in Task 3.
 
 - [ ] **Step 2: Run tests to verify they fail**
 
@@ -356,7 +365,7 @@ func RestoreLoopSeed(conn *sql.DB, name string) (*LoopSeed, error)
 func RemoveLoopSeed(conn *sql.DB, name string) error
 ```
 
-Every public operation first calls `EnsureLoopSchema`. Validate seed fields before SQL. `RemoveLoopSeed` must check `SELECT COUNT(*) FROM loop_runs WHERE loop_id = ?` and return an error instructing the caller to archive when the count is nonzero.
+Runtime operations assume the roll already contains the base-agent Loop schema. Validate seed fields before SQL. `RemoveLoopSeed` must check `SELECT COUNT(*) FROM loop_runs WHERE loop_id = ?` and return an error instructing the caller to archive when the count is nonzero.
 
 - [ ] **Step 5: Run seed tests**
 
@@ -416,6 +425,16 @@ func TestStartLoopRunRejectsSecondMainAndGrandchild(t *testing.T) {
 		t.Fatal("accepted grandchild")
 	}
 }
+
+func setupLoopRunTest(t *testing.T) *sql.DB {
+	t.Helper()
+	conn := openLoopTestDB(t)
+	applyLoopTestSchema(t, conn)
+	if _, err := InsertLoopSeed(conn, "review", "Review memory", "Inspect memories", 0.8); err != nil {
+		t.Fatal(err)
+	}
+	return conn
+}
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -442,13 +461,12 @@ func ListActiveChildLoopRuns(conn *sql.DB, mainRunID int64) ([]LoopRun, error)
 
 `StartLoopRun` must:
 
-1. Call `EnsureLoopSchema`.
-2. Begin a transaction.
-3. Load a non-archived seed.
-4. For a main run, reject an existing active main.
-5. For a child, require the parent to be active, on the same page, and itself a main run.
-6. Insert a seed snapshot with status `active`, supplied normalized plan, and `null` for other JSON fields.
-7. Commit and return the inserted run.
+1. Begin a transaction.
+2. Load a non-archived seed.
+3. For a main run, reject an existing active main.
+4. For a child, require the parent to be active, on the same page, and itself a main run.
+5. Insert a seed snapshot with status `active`, supplied normalized plan, and `null` for other JSON fields.
+6. Commit and return the inserted run.
 
 Convert SQLite unique-index conflicts for a second active main into a stable error message.
 
@@ -1038,28 +1056,6 @@ func TestLoopEndToEndAcrossIndependentPages(t *testing.T) {
 		t.Fatalf("page B focus = %#v; runs A=%d B=%d", gotB.Focus.Main, runA.ID, runB.ID)
 	}
 
-	rows, err := conn.Query(`PRAGMA table_info(loop)`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer rows.Close()
-	legacy := map[string]bool{
-		"type": true, "status": true, "executed_count": true, "result": true,
-	}
-	for rows.Next() {
-		var cid, notNull, pk int
-		var name, columnType string
-		var defaultValue any
-		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &pk); err != nil {
-			t.Fatal(err)
-		}
-		if legacy[name] {
-			t.Fatalf("built loop table still contains legacy column %q", name)
-		}
-	}
-	if err := rows.Err(); err != nil {
-		t.Fatal(err)
-	}
 }
 ```
 

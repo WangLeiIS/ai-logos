@@ -66,6 +66,8 @@ Detailed temporary steps belong in the main run's `plan`; they do not become loo
 
 ## Data Model
 
+Loop is introduced as a new base-agent schema. Logos does not migrate or adapt rolls built with an earlier Loop table; those rolls must be rebuilt from the current base-agent definition.
+
 ### `loop`
 
 The seed table contains only reusable behavior definitions.
@@ -356,6 +358,7 @@ Tests cover:
 
 ## Out of Scope
 
+- Compatibility migrations for earlier Loop table structures.
 - Scheduling, timers, cron behavior, or background execution.
 - Logos deciding which loop the agent should pursue.
 - Automatic continuation of runs between pages.
