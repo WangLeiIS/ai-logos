@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"math"
 	"strings"
 )
 
@@ -14,7 +15,7 @@ func InsertMemory(db *sql.DB, pageID, name, question, content string, importance
 	if name == "" || question == "" || content == "" {
 		return nil, fmt.Errorf("insert memory: name, question, content must not be blank")
 	}
-	if importance < 0 || importance > 1 {
+	if math.IsNaN(importance) || importance < 0 || importance > 1 {
 		return nil, fmt.Errorf("insert memory: importance must be 0.0-1.0")
 	}
 	if strings.TrimSpace(pageID) == "" {
@@ -122,7 +123,7 @@ func UpdateMemoryContent(db *sql.DB, memoryID int64, content string, importance 
 	if content == "" {
 		return fmt.Errorf("update memory content: content must not be blank")
 	}
-	if importance < 0 || importance > 1 {
+	if math.IsNaN(importance) || importance < 0 || importance > 1 {
 		return fmt.Errorf("update memory content: importance must be 0.0-1.0")
 	}
 

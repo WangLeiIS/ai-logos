@@ -2,6 +2,7 @@ package db
 
 import (
 	"database/sql"
+	"math"
 	"testing"
 )
 
@@ -20,35 +21,70 @@ func openMemoryTestDB(t *testing.T) *sql.DB {
 func TestInsertMemoryValidation(t *testing.T) {
 	conn := openMemoryTestDB(t)
 
-	_, err := InsertMemory(conn, "page-1", "", "q", "content", 0.5)
-	if err == nil {
-		t.Fatal("expected error for blank name")
+	t.Run("blank name", func(t *testing.T) {
+		_, err := InsertMemory(conn, "page-1", "", "q", "content", 0.5)
+		if err == nil {
+			t.Fatal("expected error for blank name")
+		}
+	})
+	t.Run("blank question", func(t *testing.T) {
+		_, err := InsertMemory(conn, "page-1", "name", "", "content", 0.5)
+		if err == nil {
+			t.Fatal("expected error for blank question")
+		}
+	})
+	t.Run("blank content", func(t *testing.T) {
+		_, err := InsertMemory(conn, "page-1", "name", "q", "", 0.5)
+		if err == nil {
+			t.Fatal("expected error for blank content")
+		}
+	})
+	t.Run("blank page_id", func(t *testing.T) {
+		_, err := InsertMemory(conn, "", "name", "q", "content", 0.5)
+		if err == nil {
+			t.Fatal("expected error for blank page_id")
+		}
+	})
+	t.Run("importance too high", func(t *testing.T) {
+		_, err := InsertMemory(conn, "page-1", "name", "q", "content", 1.5)
+		if err == nil {
+			t.Fatal("expected error for importance > 1.0")
+		}
+	})
+	t.Run("importance too low", func(t *testing.T) {
+		_, err := InsertMemory(conn, "page-1", "name", "q", "content", -0.1)
+		if err == nil {
+			t.Fatal("expected error for importance < 0.0")
+		}
+	})
+	t.Run("NaN importance", func(t *testing.T) {
+		_, err := InsertMemory(conn, "page-1", "name", "q", "content", math.NaN())
+		if err == nil {
+			t.Fatal("expected error for NaN importance")
+		}
+	})
+}
+
+func TestUpdateMemoryContentValidation(t *testing.T) {
+	conn := openMemoryTestDB(t)
+	mem, err := InsertMemory(conn, "page-1", "test", "test?", "original content", 0.5)
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	_, err = InsertMemory(conn, "page-1", "name", "", "content", 0.5)
-	if err == nil {
-		t.Fatal("expected error for blank question")
-	}
+	t.Run("blank content", func(t *testing.T) {
+		err := UpdateMemoryContent(conn, mem.ID, "", 0.5)
+		if err == nil {
+			t.Fatal("expected error for blank content")
+		}
+	})
 
-	_, err = InsertMemory(conn, "page-1", "name", "q", "", 0.5)
-	if err == nil {
-		t.Fatal("expected error for blank content")
-	}
-
-	_, err = InsertMemory(conn, "", "name", "q", "content", 0.5)
-	if err == nil {
-		t.Fatal("expected error for blank page_id")
-	}
-
-	_, err = InsertMemory(conn, "page-1", "name", "q", "content", 1.5)
-	if err == nil {
-		t.Fatal("expected error for importance > 1.0")
-	}
-
-	_, err = InsertMemory(conn, "page-1", "name", "q", "content", -0.1)
-	if err == nil {
-		t.Fatal("expected error for importance < 0.0")
-	}
+	t.Run("NaN importance", func(t *testing.T) {
+		err := UpdateMemoryContent(conn, mem.ID, "content", math.NaN())
+		if err == nil {
+			t.Fatal("expected error for NaN importance")
+		}
+	})
 }
 
 func TestInsertAndQueryMemory(t *testing.T) {
@@ -85,9 +121,15 @@ func TestInsertAndQueryMemory(t *testing.T) {
 func TestQueryMemoryFilters(t *testing.T) {
 	conn := openMemoryTestDB(t)
 
-	InsertMemory(conn, "page-1", "python-version", "Python 版本？", "Python 3.12", 0.8)
-	InsertMemory(conn, "page-1", "go-version", "Go 版本？", "Go 1.24", 0.5)
-	InsertMemory(conn, "page-1", "rust-interest", "用户对 Rust 感兴趣吗？", "用户想学 Rust", 0.3)
+	if _, err := InsertMemory(conn, "page-1", "python-version", "Python 版本？", "Python 3.12", 0.8); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := InsertMemory(conn, "page-1", "go-version", "Go 版本？", "Go 1.24", 0.5); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := InsertMemory(conn, "page-1", "rust-interest", "用户对 Rust 感兴趣吗？", "用户想学 Rust", 0.3); err != nil {
+		t.Fatal(err)
+	}
 
 	// Keyword search
 	results, err := QueryMemory(conn, "page-1", QueryMemoryParams{Keyword: "Python"})
@@ -129,18 +171,24 @@ func TestQueryMemoryFilters(t *testing.T) {
 func TestIncrementSleepCount(t *testing.T) {
 	conn := openMemoryTestDB(t)
 
-	mem, _ := InsertMemory(conn, "page-1", "test", "test?", "content", 0.5)
+	mem, err := InsertMemory(conn, "page-1", "test", "test?", "content", 0.5)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := IncrementSleepCount(conn, mem.ID); err != nil {
 		t.Fatal(err)
 	}
 
-	results, _ := QueryMemory(conn, "page-1", QueryMemoryParams{})
+	results, err := QueryMemory(conn, "page-1", QueryMemoryParams{})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(results) != 1 || results[0].SleepCount != 1 {
 		t.Fatalf("sleep_count = %d, want 1", results[0].SleepCount)
 	}
 
 	// Verify error on non-existent ID
-	err := IncrementSleepCount(conn, 99999)
+	err = IncrementSleepCount(conn, 99999)
 	if err == nil {
 		t.Fatal("expected error for non-existent memory ID")
 	}
@@ -149,12 +197,18 @@ func TestIncrementSleepCount(t *testing.T) {
 func TestUpdateMemoryContent(t *testing.T) {
 	conn := openMemoryTestDB(t)
 
-	mem, _ := InsertMemory(conn, "page-1", "test", "test?", "original content", 0.5)
+	mem, err := InsertMemory(conn, "page-1", "test", "test?", "original content", 0.5)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := UpdateMemoryContent(conn, mem.ID, "refined content", 0.9); err != nil {
 		t.Fatal(err)
 	}
 
-	results, _ := QueryMemory(conn, "page-1", QueryMemoryParams{})
+	results, err := QueryMemory(conn, "page-1", QueryMemoryParams{})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(results) != 1 {
 		t.Fatal("memory not found after update")
 	}
@@ -166,7 +220,7 @@ func TestUpdateMemoryContent(t *testing.T) {
 	}
 
 	// Verify error on non-existent ID
-	err := UpdateMemoryContent(conn, 99999, "content", 0.5)
+	err = UpdateMemoryContent(conn, 99999, "content", 0.5)
 	if err == nil {
 		t.Fatal("expected error for non-existent memory ID")
 	}
@@ -175,8 +229,12 @@ func TestUpdateMemoryContent(t *testing.T) {
 func TestQueryMemoryByName(t *testing.T) {
 	conn := openMemoryTestDB(t)
 
-	InsertMemory(conn, "page-1", "python-version", "Python 版本？", "Python 3.12", 0.8)
-	InsertMemory(conn, "page-1", "go-version", "Go 版本？", "Go 1.24", 0.5)
+	if _, err := InsertMemory(conn, "page-1", "python-version", "Python 版本？", "Python 3.12", 0.8); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := InsertMemory(conn, "page-1", "go-version", "Go 版本？", "Go 1.24", 0.5); err != nil {
+		t.Fatal(err)
+	}
 
 	// Exact name match
 	results, err := QueryMemory(conn, "page-1", QueryMemoryParams{Name: "python-version"})
