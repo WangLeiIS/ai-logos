@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -15,6 +16,8 @@ import (
 
 	"github.com/google/uuid"
 )
+
+var ErrPageNotFound = errors.New("page not found")
 
 type Page struct {
 	ID        int    `json:"id"`
@@ -44,7 +47,7 @@ type Dna struct {
 }
 
 func nowISO() string {
-	return time.Now().UTC().Format(time.RFC3339Nano)
+	return time.Now().UTC().Format("2006-01-02T15:04:05.000000000Z")
 }
 
 func Open(dbPath string) (*sql.DB, error) {
@@ -111,8 +114,11 @@ func GetPageByPageID(db *sql.DB, pageID string) (*Page, error) {
 		"SELECT id, page_id, cwd, context, created_at, updated_at FROM pages WHERE page_id = ?",
 		pageID,
 	).Scan(&p.ID, &p.PageID, &p.Cwd, &p.Context, &p.CreatedAt, &p.UpdatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, pageNotFound(pageID)
+	}
 	if err != nil {
-		return nil, fmt.Errorf("page not found: %w", err)
+		return nil, fmt.Errorf("get page %q: %w", pageID, err)
 	}
 	return &p, nil
 }
@@ -130,15 +136,47 @@ func UpdatePageContext(db *sql.DB, pageID string, context string) (*Page, error)
 }
 
 func DeletePage(db *sql.DB, pageID string) error {
-	res, err := db.Exec("DELETE FROM pages WHERE page_id = ?", pageID)
+	delay := time.Millisecond
+	for attempt := 0; ; attempt++ {
+		err := deletePageOnce(db, pageID)
+		if !isSQLiteBusyOrLocked(err) || attempt == loopRunMaxRetries {
+			return err
+		}
+		time.Sleep(delay)
+		delay *= 2
+	}
+}
+
+func deletePageOnce(db *sql.DB, pageID string) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin deleting page %q: %w", pageID, err)
+	}
+	defer tx.Rollback()
+
+	now := nowISO()
+	if err := abortActiveLoopRunsForPage(tx, pageID, "page_deleted", now); err != nil {
+		return err
+	}
+	res, err := tx.Exec("DELETE FROM pages WHERE page_id = ?", pageID)
 	if err != nil {
 		return fmt.Errorf("delete page: %w", err)
 	}
-	n, _ := res.RowsAffected()
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("get deleted page count: %w", err)
+	}
 	if n == 0 {
-		return fmt.Errorf("page '%s' not found", pageID)
+		return pageNotFound(pageID)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit deleting page %q: %w", pageID, err)
 	}
 	return nil
+}
+
+func pageNotFound(pageID string) error {
+	return fmt.Errorf("page %q not found: %w", pageID, ErrPageNotFound)
 }
 
 func InsertMemory(db *sql.DB, content string, importance float64) (*Memory, error) {

@@ -52,6 +52,15 @@ func TestStartLoopRunRejectsBlankPageAndSeed(t *testing.T) {
 	}
 }
 
+func TestStartLoopRunRejectsMissingPageWithStableError(t *testing.T) {
+	conn := setupLoopRunTest(t)
+
+	if _, err := StartLoopRun(conn, "missing-page", "review", nil, "null"); err == nil ||
+		!errors.Is(err, ErrPageNotFound) || !strings.Contains(err.Error(), `page "missing-page" not found`) {
+		t.Fatalf("missing page error = %v", err)
+	}
+}
+
 func TestStartLoopRunRejectsSecondMainPerPageButAllowsOtherPage(t *testing.T) {
 	conn := setupLoopRunTest(t)
 
@@ -95,6 +104,38 @@ func TestStartLoopRunConcurrentIndependentPagesBothSucceed(t *testing.T) {
 	for i, err := range errs {
 		if err != nil {
 			t.Fatalf("start %d failed: %v", i, err)
+		}
+	}
+}
+
+func TestStartLoopRunConcurrentWithDeleteCannotLeaveActiveOrphan(t *testing.T) {
+	for attempt := 0; attempt < 20; attempt++ {
+		first, second := setupConcurrentLoopRunTest(t)
+		start := make(chan struct{})
+		startResult := make(chan error, 1)
+		deleteResult := make(chan error, 1)
+		go func() {
+			<-start
+			_, err := StartLoopRun(first, "page-a", "review", nil, "null")
+			startResult <- err
+		}()
+		go func() {
+			<-start
+			deleteResult <- DeletePage(second, "page-a")
+		}()
+		close(start)
+		startErr, deleteErr := <-startResult, <-deleteResult
+
+		if deleteErr != nil {
+			t.Fatalf("attempt %d delete error = %v; start error = %v", attempt, deleteErr, startErr)
+		}
+		if startErr != nil && !errors.Is(startErr, ErrPageNotFound) {
+			t.Fatalf("attempt %d start error = %v", attempt, startErr)
+		}
+		if _, err := GetActiveMainLoopRun(first, "page-a"); err == nil {
+			t.Fatalf("attempt %d left active orphan run; start error = %v", attempt, startErr)
+		} else if !errors.Is(err, ErrLoopRunNotFound) {
+			t.Fatal(err)
 		}
 	}
 }
@@ -363,6 +404,72 @@ func TestAbortLoopRunValidatesReasonDefaultsResultAndRejectsEndedRun(t *testing.
 	}
 }
 
+func TestDeletePageAbortsActiveMainAndChildrenAndPreservesEndedRuns(t *testing.T) {
+	conn := setupLoopRunTest(t)
+	main := mustStartLoopRun(t, conn, "page-a", nil)
+	child := mustStartLoopRun(t, conn, "page-a", &main.ID)
+	ended := insertEndedReviewRunForDelete(t, conn, "page-a")
+
+	if err := DeletePage(conn, "page-a"); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := GetPageByPageID(conn, "page-a"); err == nil {
+		t.Fatal("deleted page still exists")
+	}
+	for _, runID := range []int64{main.ID, child.ID} {
+		run, err := GetLoopRun(conn, runID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if run.Status != "aborted" || run.AbortReason == nil || *run.AbortReason != "page_deleted" ||
+			run.EndedAt == nil || run.UpdatedAt != *run.EndedAt {
+			t.Fatalf("active run after page deletion = %#v", run)
+		}
+		mustParseLoopRunTime(t, *run.EndedAt)
+	}
+	gotEnded, err := GetLoopRun(conn, ended.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotEnded.Status != ended.Status || gotEnded.AbortReason != nil ||
+		gotEnded.EndedAt == nil || *gotEnded.EndedAt != *ended.EndedAt ||
+		gotEnded.UpdatedAt != ended.UpdatedAt {
+		t.Fatalf("ended run changed: before = %#v after = %#v", ended, gotEnded)
+	}
+}
+
+func TestDeletePageRollsBackRunAbortsWhenPageDeleteFails(t *testing.T) {
+	conn := setupLoopRunTest(t)
+	main := mustStartLoopRun(t, conn, "page-a", nil)
+	child := mustStartLoopRun(t, conn, "page-a", &main.ID)
+	if _, err := conn.Exec(`
+		CREATE TRIGGER reject_page_delete
+		BEFORE DELETE ON pages
+		BEGIN
+			SELECT RAISE(ABORT, 'page delete rejected');
+		END
+	`); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := DeletePage(conn, "page-a"); err == nil || !strings.Contains(err.Error(), "page delete rejected") {
+		t.Fatalf("DeletePage error = %v", err)
+	}
+	if _, err := GetPageByPageID(conn, "page-a"); err != nil {
+		t.Fatalf("page missing after rollback: %v", err)
+	}
+	for _, runID := range []int64{main.ID, child.ID} {
+		run, err := GetLoopRun(conn, runID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if run.Status != "active" || run.AbortReason != nil || run.EndedAt != nil {
+			t.Fatalf("run changed despite rollback: %#v", run)
+		}
+	}
+}
+
 func TestReflectLoopRunOnlyAllowsEndedRunsAndReplacesReflection(t *testing.T) {
 	conn := setupLoopRunTest(t)
 	run := mustStartLoopRun(t, conn, "page-a", nil)
@@ -591,6 +698,9 @@ func TestLoopRunConcurrentChildStartAndMainEndPreservesLifecycleInvariant(t *tes
 func setupLoopRunTest(t *testing.T) *sql.DB {
 	t.Helper()
 	conn := openLoopTestDB(t)
+	insertLoopTestPage(t, conn, "page-a")
+	insertLoopTestPage(t, conn, "page-b")
+	insertLoopTestPage(t, conn, "page-c")
 	if _, err := InsertLoopSeed(conn, "review", "Review memory", "Inspect memories", 0.8); err != nil {
 		t.Fatal(err)
 	}
@@ -607,6 +717,8 @@ func setupConcurrentLoopRunTest(t *testing.T) (*sql.DB, *sql.DB) {
 	first.SetMaxOpenConns(1)
 	t.Cleanup(func() { first.Close() })
 	applyLoopTestSchema(t, first)
+	insertLoopTestPage(t, first, "page-a")
+	insertLoopTestPage(t, first, "page-b")
 	if _, err := InsertLoopSeed(first, "review", "Review memory", "Inspect memories", 0.8); err != nil {
 		t.Fatal(err)
 	}
@@ -679,4 +791,41 @@ func mustParseLoopRunTime(t *testing.T, value string) time.Time {
 		t.Fatalf("parse loop run timestamp %q: %v", value, err)
 	}
 	return parsed
+}
+
+func insertLoopTestPage(t *testing.T, conn *sql.DB, pageID string) {
+	t.Helper()
+	now := nowISO()
+	if _, err := conn.Exec(`
+		INSERT INTO pages (page_id, cwd, context, created_at, updated_at)
+		VALUES (?, '.', '{}', ?, ?)
+	`, pageID, now, now); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func insertEndedReviewRunForDelete(t *testing.T, conn *sql.DB, pageID string) *LoopRun {
+	t.Helper()
+	endedAt := "2026-06-09T10:00:00.123456789Z"
+	res, err := conn.Exec(`
+		INSERT INTO loop_runs (
+			loop_id, page_id, seed_name, seed_describe, seed_content, seed_weight,
+			status, plan, progress, result, reflection, started_at, ended_at, updated_at
+		)
+		SELECT id, ?, name, describe, content, weight,
+			'completed', 'null', 'null', '"done"', 'null', ?, ?, ?
+		FROM loop WHERE name = 'review'
+	`, pageID, endedAt, endedAt, endedAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		t.Fatal(err)
+	}
+	run, err := GetLoopRun(conn, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return run
 }

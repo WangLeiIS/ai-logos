@@ -120,6 +120,20 @@ logos book query --book <book-id> --tag <tag> --tag <tag> --cwd .
 
 Use repeated `--book` flags for multi-book search. Do not pass the full natural-language question as a tag unless it is intentionally indexed as one exact tag.
 
+### Choose and record autonomous loop work
+
+Resolved page context includes `loop.focus` for the current page and `loop.available` seeds. Logos never executes loop work; you choose a seed, perform the work yourself, and use commands to record progress.
+
+```bash
+logos loop current --cwd .
+logos loop run <name> --plan '{"steps":["first step"]}' --cwd .
+logos loop update --progress '{"completed":["first step"]}' --cwd .
+logos loop complete --result '{"summary":"done"}' --cwd .
+logos loop history <name> --cwd .
+```
+
+Each page has an independent active main run. Child runs use `--parent <main-run-id>` and are limited to one level. End children before completing or aborting the main run.
+
 ## Command Reference
 
 | Command | Purpose |
@@ -144,6 +158,10 @@ Use repeated `--book` flags for multi-book search. Do not pass the full natural-
 | `logos book list [name] [--cwd .]` | List registered books |
 | `logos book inspect <book-id> [name] [--cwd .]` | Inspect registered book metadata |
 | `logos book query --book <id>... --tag <tag>... [--limit 10] [--per-book-limit 5] [--cwd .]` | Retrieve original chunks by exact tags |
+| `logos loop list [--archived] [--cwd .]` | List reusable loop seeds |
+| `logos loop run <name> [--parent <id>] [--plan <value>] [--cwd .]` | Record an autonomous run choice |
+| `logos loop update [run-id] [--plan <value>] [--progress <value>] [--cwd .]` | Replace supplied active-run fields |
+| `logos loop complete|abort|reflect|current|history|show ...` | Manage run lifecycle and life records |
 
 ## Key Concepts
 
@@ -156,7 +174,8 @@ Use repeated `--book` flags for multi-book search. Do not pass the full natural-
 - **template page** — page_id=0 stores the default context; new pages inherit from it
 - **active page** — each working directory tracks its own active page via system.db
 - **dna** — decision-making Q&A pairs defining agent behavior. Context loads questions only (no answers); use `query-dna` to retrieve full records on demand
-- **loop** — operational task list defining agent's run patterns. Two types: `once` (pending→done) and `periodic` (always active with executed_count). Each loop has a name, description, and full content instruction
+- **loop seed** — reusable behavioral intention the agent may choose; it has no global execution status
+- **loop run** — page-scoped plan, progress, result, and reflection record. Logos records it but never executes the work
 - **memory** — timestamped records with importance scores, stored per iroll
 - **book** — a build-validated knowledge bundle under `Resources/books/`; queried using explicit exact tags
 

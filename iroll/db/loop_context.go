@@ -86,38 +86,7 @@ func listActivePageLoopRuns(conn *sql.DB, pageID string) ([]LoopRun, error) {
 }
 
 func listAvailableLoopSeeds(conn *sql.DB) ([]AvailableLoopSeed, error) {
-	rows, err := conn.Query(`
-		WITH stats AS (
-			SELECT
-				loop_id,
-				SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) AS active,
-				SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed,
-				SUM(CASE WHEN status = 'aborted' THEN 1 ELSE 0 END) AS aborted,
-				MAX(ended_at) AS last_ended_at
-			FROM loop_runs
-			GROUP BY loop_id
-		),
-		latest_ended AS (
-			SELECT loop_id, result, ROW_NUMBER() OVER (
-				PARTITION BY loop_id ORDER BY ended_at DESC, id DESC
-			) AS rank
-			FROM loop_runs
-			WHERE ended_at IS NOT NULL
-		)
-		SELECT
-			loop.id, loop.name, loop.describe, loop.content, loop.weight,
-			loop.archived_at, loop.created_at, loop.updated_at,
-			COALESCE(stats.active, 0),
-			COALESCE(stats.completed, 0),
-			COALESCE(stats.aborted, 0),
-			stats.last_ended_at,
-			COALESCE(latest_ended.result, 'null')
-		FROM loop
-		LEFT JOIN stats ON stats.loop_id = loop.id
-		LEFT JOIN latest_ended ON latest_ended.loop_id = loop.id AND latest_ended.rank = 1
-		WHERE loop.archived_at IS NULL
-		ORDER BY loop.weight DESC, loop.name ASC
-	`)
+	rows, err := conn.Query(availableLoopSeedsQuery)
 	if err != nil {
 		return nil, fmt.Errorf("list available loop seeds: %w", err)
 	}
@@ -153,3 +122,36 @@ func listAvailableLoopSeeds(conn *sql.DB) ([]AvailableLoopSeed, error) {
 	}
 	return seeds, nil
 }
+
+const availableLoopSeedsQuery = `
+	WITH stats AS (
+		SELECT
+			loop_id,
+			SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) AS active,
+			SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed,
+			SUM(CASE WHEN status = 'aborted' THEN 1 ELSE 0 END) AS aborted
+		FROM loop_runs
+		GROUP BY loop_id
+	)
+	SELECT
+		loop.id, loop.name, loop.describe, loop.content, loop.weight,
+		loop.archived_at, loop.created_at, loop.updated_at,
+		COALESCE(stats.active, 0),
+		COALESCE(stats.completed, 0),
+		COALESCE(stats.aborted, 0),
+		latest_ended.ended_at,
+		COALESCE(latest_ended.result, 'null')
+	FROM loop
+	LEFT JOIN stats ON stats.loop_id = loop.id
+	LEFT JOIN loop_runs latest_ended ON latest_ended.id = (
+		SELECT candidate.id
+		FROM loop_runs candidate
+		WHERE candidate.loop_id = loop.id
+			AND candidate.status IN ('completed', 'aborted')
+			AND candidate.ended_at IS NOT NULL
+		ORDER BY candidate.ended_at DESC, candidate.id DESC
+		LIMIT 1
+	)
+	WHERE loop.archived_at IS NULL
+	ORDER BY loop.weight DESC, loop.name ASC
+`

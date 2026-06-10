@@ -8,7 +8,7 @@ import (
 )
 
 func TestIrollPathRejectsUnsafeName(t *testing.T) {
-	t.Setenv("USERPROFILE", t.TempDir())
+	setTestHome(t)
 
 	if _, err := IrollPath("../outside"); err == nil {
 		t.Fatal("IrollPath returned nil error for unsafe name")
@@ -16,8 +16,7 @@ func TestIrollPathRejectsUnsafeName(t *testing.T) {
 }
 
 func TestExtractRejectsZipSlip(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("USERPROFILE", home)
+	home := setTestHome(t)
 
 	archivePath := filepath.Join(t.TempDir(), "malicious.iroll")
 	writeZip(t, archivePath, map[string]string{
@@ -37,8 +36,7 @@ func TestExtractRejectsZipSlip(t *testing.T) {
 }
 
 func TestExtractRejectsUnsafeName(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("USERPROFILE", home)
+	setTestHome(t)
 
 	archivePath := filepath.Join(t.TempDir(), "valid.iroll")
 	writeZip(t, archivePath, map[string]string{"ai_roll.db": "database"})
@@ -49,8 +47,7 @@ func TestExtractRejectsUnsafeName(t *testing.T) {
 }
 
 func TestExtractValidArchive(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("USERPROFILE", home)
+	home := setTestHome(t)
 
 	archivePath := filepath.Join(t.TempDir(), "valid.iroll")
 	writeZip(t, archivePath, map[string]string{
@@ -69,6 +66,14 @@ func TestExtractValidArchive(t *testing.T) {
 	if string(got) != "hello" {
 		t.Fatalf("extracted content = %q, want hello", got)
 	}
+}
+
+func setTestHome(t *testing.T) string {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	return home
 }
 
 func writeZip(t *testing.T, path string, files map[string]string) {

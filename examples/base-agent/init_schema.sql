@@ -64,6 +64,10 @@ ON loop_runs(parent_run_id, status);
 CREATE INDEX idx_loop_runs_loop_started
 ON loop_runs(loop_id, id DESC);
 
+CREATE INDEX idx_loop_runs_loop_ended
+ON loop_runs(loop_id, ended_at DESC, id DESC)
+WHERE status IN ('completed', 'aborted') AND ended_at IS NOT NULL;
+
 CREATE UNIQUE INDEX idx_loop_runs_one_active_main
 ON loop_runs(page_id)
 WHERE status = 'active' AND parent_run_id IS NULL;

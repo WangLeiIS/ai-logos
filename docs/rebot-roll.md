@@ -29,7 +29,8 @@ agent.iroll (ZIP)
 |----|------|------|
 | metadata | 是 | key-value 元数据（name, version, description 等） |
 | dna | 否 | agent 的决策 DNA，Q&A 对定义底层决策机制 |
-| loop | 否 | 循环任务表，定义 agent 的运行模式（once/periodic） |
+| loop | 否 | agent 可自主选择的可复用行为种子 |
+| loop_runs | 否 | page 独立的运行状态与生命记录 |
 
 **metadata 表结构：**
 
@@ -59,16 +60,17 @@ agent.iroll (ZIP)
 | 字段 | 类型 | 约束 | 说明 |
 |------|------|------|------|
 | id | INTEGER | PRIMARY KEY AUTOINCREMENT | 主键 |
-| type | TEXT | NOT NULL | 任务类型：`once`（一次性）/ `periodic`（周期） |
-| name | TEXT | NOT NULL | 短标识，如 `self-cognition` |
+| name | TEXT | NOT NULL UNIQUE | 稳定短标识，如 `self-cognition` |
 | describe | TEXT | NOT NULL | 简短描述，如 "自我认知" |
-| content | TEXT | NOT NULL | 完整任务指令 |
-| status | TEXT | NOT NULL | once: `pending` / `done`；periodic: 始终 `active` |
-| executed_count | INTEGER | DEFAULT 0 | 执行次数计数器 |
-| result | TEXT | DEFAULT '' | 执行结果，periodic 每次覆盖 |
-| weight | REAL | DEFAULT 0.5 | 优先级权重 |
+| content | TEXT | NOT NULL | 完整行为种子 |
+| weight | REAL | 0..1 | agent 选择时的优先级参考 |
+| archived_at | TEXT | | 非空表示归档 |
 | created_at | TEXT | NOT NULL | 创建时间 |
 | updated_at | TEXT | NOT NULL | 更新时间 |
+
+`loop_runs` 是运行事实的唯一来源，包含 `page_id`、可选的一层 `parent_run_id`、种子快照、`plan/progress/result/reflection` 和 `active/completed/aborted` 状态。每个 page 最多一个 active 主 run，不同 page 可以同时运行同一种子。
+
+Logos 只管理上下文和记录，不执行任务。读取 page context 时会动态注入 `loop.focus` 与 `loop.available`，原始 `pages.context` 不保存 loop 运行状态。
 
 ### 3.2 记忆部分
 
@@ -230,7 +232,23 @@ Resources/books/<book-id>/
 
 构建完成所有 Layerfile 指令后，会自动发现、校验并注册 `Resources/books/` 下的 Book Bundle。任何无效 Bundle 都会使构建失败。
 
-### 5.5 知识书籍
+### 5.5 Loop
+
+```bash
+logos loop list [--archived] [--cwd .]
+logos loop add <name> --describe <text> --content <text> [--weight 0.5] [--cwd .]
+logos loop edit|inspect|remove|archive|restore ...
+logos loop run <name> [--parent <main-run-id>] [--plan <json-or-text>] [--cwd .]
+logos loop update [run-id] [--plan <value>] [--progress <value>] [--cwd .]
+logos loop complete [run-id] --result <value> [--cwd .]
+logos loop abort [run-id] --reason <text> [--result <value>] [--cwd .]
+logos loop reflect <run-id> --content <value> [--cwd .]
+logos loop current|history|show ...
+```
+
+省略 `update/complete/abort` 的 run ID 时，命令作用于当前 page 的 active 主 run。子 run 必须显式指定。主 run 有 active 子 run 时不能结束。
+
+### 5.6 知识书籍
 
 | 命令 | 说明 |
 |------|------|
@@ -259,13 +277,12 @@ Resources/books/<book-id>/
 - [x] 分层构建（FROM / MIGRATE / COPY）
 - [x] 构建历史追踪
 - [x] dna 表（决策 DNA：认知观/伦理观/审美观/本体观）
-- [x] loop 表（循环任务：一次性/周期）
+- [x] loop 种子、page 独立 loop_runs、动态 context 与 CLI
 - [x] 路径安全校验（iroll 名称、资源路径、ZIP 解压、符号链接）
 - [x] Book Bundle v1（Parquet 校验、构建注册、多书标签检索）
 
 ### 待做
 
-- [ ] loop 命令行支持（list/finish/add）
 - [ ] 遗忘表定义
 - [ ] skill 表 + Resources/skills/ 技能管理
 - [ ] 记忆检索（按重要性/关键词查询）

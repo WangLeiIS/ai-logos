@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"logos/book"
@@ -280,6 +281,9 @@ func TestBuildBaseAgentContainsLoopSchema(t *testing.T) {
 	assertIndexExists(t, conn, "idx_loop_runs_parent_status")
 	assertIndexExists(t, conn, "idx_loop_runs_loop_started")
 	assertIndexColumns(t, conn, "idx_loop_runs_loop_started", []string{"loop_id ASC", "id DESC"})
+	assertIndexExists(t, conn, "idx_loop_runs_loop_ended")
+	assertIndexColumns(t, conn, "idx_loop_runs_loop_ended", []string{"loop_id ASC", "ended_at DESC", "id DESC"})
+	assertIndexSQLContains(t, conn, "idx_loop_runs_loop_ended", "ended_at IS NOT NULL")
 	assertIndexExists(t, conn, "idx_loop_runs_one_active_main")
 
 	assertExecFails(t, conn, `
@@ -290,6 +294,15 @@ func TestBuildBaseAgentContainsLoopSchema(t *testing.T) {
 	mainRunID := insertLoopRun(t, conn, 1, "page-one", nil, "active")
 	insertLoopRun(t, conn, 1, "page-one", nil, "completed")
 	insertLoopRun(t, conn, 1, "page-one", mainRunID, "active")
+	assertQueryUsesIndex(t, conn, `
+		SELECT id
+		FROM loop_runs
+		WHERE loop_id = 1
+			AND status IN ('completed', 'aborted')
+			AND ended_at IS NOT NULL
+		ORDER BY ended_at DESC, id DESC
+		LIMIT 1
+	`, "idx_loop_runs_loop_ended")
 
 	assertLoopRunInsertFails(t, conn, 1, "page-one", nil, "active")
 	assertLoopRunInsertFails(t, conn, 1, "page-two", nil, "pending")
@@ -359,6 +372,44 @@ func assertIndexColumns(t *testing.T, conn *sql.DB, name string, want []string) 
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("index %q columns = %#v, want %#v", name, got, want)
+	}
+}
+
+func assertIndexSQLContains(t *testing.T, conn *sql.DB, name, want string) {
+	t.Helper()
+	var sqlText string
+	if err := conn.QueryRow(
+		`SELECT sql FROM sqlite_master WHERE type = 'index' AND name = ?`, name,
+	).Scan(&sqlText); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(sqlText, want) {
+		t.Fatalf("index %q SQL = %q, want %q", name, sqlText, want)
+	}
+}
+
+func assertQueryUsesIndex(t *testing.T, conn *sql.DB, query, index string) {
+	t.Helper()
+	rows, err := conn.Query("EXPLAIN QUERY PLAN " + query)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	var details []string
+	for rows.Next() {
+		var id, parent, notUsed int
+		var detail string
+		if err := rows.Scan(&id, &parent, &notUsed, &detail); err != nil {
+			t.Fatal(err)
+		}
+		details = append(details, detail)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	plan := strings.Join(details, "\n")
+	if !strings.Contains(plan, index) || strings.Contains(plan, "TEMP B-TREE") {
+		t.Fatalf("query plan = %q, want index %q without temp sort", plan, index)
 	}
 }
 

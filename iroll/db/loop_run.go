@@ -49,6 +49,17 @@ const (
 	maximumLoopHistoryLimit = 200
 )
 
+func abortActiveLoopRunsForPage(tx *sql.Tx, pageID, reason, endedAt string) error {
+	if _, err := tx.Exec(`
+		UPDATE loop_runs
+		SET status = 'aborted', abort_reason = ?, ended_at = ?, updated_at = ?
+		WHERE page_id = ? AND status = 'active'
+	`, reason, endedAt, endedAt, pageID); err != nil {
+		return fmt.Errorf("abort active loop runs for page %q: %w", pageID, err)
+	}
+	return nil
+}
+
 func startLoopRunOnce(conn *sql.DB, pageID, seedName string, parentRunID *int64, plan string) (*LoopRun, error) {
 	tx, err := conn.Begin()
 	if err != nil {
@@ -56,6 +67,9 @@ func startLoopRunOnce(conn *sql.DB, pageID, seedName string, parentRunID *int64,
 	}
 	defer tx.Rollback()
 
+	if err := requirePageForLoopRun(tx, pageID); err != nil {
+		return nil, err
+	}
 	seed, err := getActiveLoopSeedForRun(tx, seedName)
 	if err != nil {
 		return nil, err
@@ -100,6 +114,18 @@ func startLoopRunOnce(conn *sql.DB, pageID, seedName string, parentRunID *int64,
 		return nil, fmt.Errorf("commit starting loop run for page %q: %w", pageID, err)
 	}
 	return run, nil
+}
+
+func requirePageForLoopRun(tx *sql.Tx, pageID string) error {
+	var exists int
+	err := tx.QueryRow("SELECT 1 FROM pages WHERE page_id = ? LIMIT 1", pageID).Scan(&exists)
+	if errors.Is(err, sql.ErrNoRows) {
+		return pageNotFound(pageID)
+	}
+	if err != nil {
+		return fmt.Errorf("validate page %q for loop run: %w", pageID, err)
+	}
+	return nil
 }
 
 func isSQLiteBusyOrLocked(err error) bool {

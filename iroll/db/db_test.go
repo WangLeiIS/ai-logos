@@ -2,10 +2,30 @@ package db
 
 import (
 	"database/sql"
+	"errors"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"testing"
+	"time"
 )
+
+func TestNowISOIsFixedWidthUTCAndLexicallyChronological(t *testing.T) {
+	got := nowISO()
+	if !regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{9}Z$`).MatchString(got) {
+		t.Fatalf("nowISO() = %q, want fixed-width UTC nanoseconds", got)
+	}
+	if _, err := time.Parse(time.RFC3339Nano, got); err != nil {
+		t.Fatalf("time.Parse(RFC3339Nano, nowISO()) = %v", err)
+	}
+
+	earlier := "2026-06-09T10:00:00.123456788Z"
+	later := "2026-06-09T10:00:00.123456789Z"
+	if !(earlier < later) {
+		t.Fatalf("fixed-width lexical chronology failed: %q >= %q", earlier, later)
+	}
+}
 
 func TestOpenEnablesForeignKeys(t *testing.T) {
 	tests := []struct {
@@ -60,6 +80,15 @@ func TestOpenEnablesForeignKeys(t *testing.T) {
 				t.Fatal("insert with invalid foreign key succeeded")
 			}
 		})
+	}
+}
+
+func TestDeletePageMissingReturnsStableError(t *testing.T) {
+	conn := openLoopTestDB(t)
+
+	if err := DeletePage(conn, "missing-page"); err == nil ||
+		!errors.Is(err, ErrPageNotFound) || !strings.Contains(err.Error(), `page "missing-page" not found`) {
+		t.Fatalf("DeletePage error = %v", err)
 	}
 }
 

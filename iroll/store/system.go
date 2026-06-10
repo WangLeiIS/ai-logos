@@ -2,10 +2,13 @@ package store
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"time"
+
+	rolldb "logos/db"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -157,27 +160,34 @@ func DeletePage(pageID string) error {
 		return err
 	}
 
-	// Delete from index
-	if _, err := sdb.Exec("DELETE FROM page_index WHERE page_id = ?", pageID); err != nil {
-		return err
-	}
-
-	// Clear active if it matches
-	sdb.Exec("DELETE FROM active_page WHERE page_id = ?", pageID)
-
-	// Delete from iroll's pages table
 	dbPath, err := DbPath(irollName)
 	if err != nil {
 		return err
 	}
-	conn, err := sql.Open("sqlite3", dbPath)
+	conn, err := rolldb.Open(dbPath)
 	if err != nil {
 		return err
 	}
 	defer conn.Close()
+	if err := rolldb.DeletePage(conn, pageID); err != nil && !errors.Is(err, rolldb.ErrPageNotFound) {
+		return err
+	}
 
-	_, err = conn.Exec("DELETE FROM pages WHERE page_id = ?", pageID)
-	return err
+	tx, err := sdb.Begin()
+	if err != nil {
+		return fmt.Errorf("begin deleting page %q from index: %w", pageID, err)
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec("DELETE FROM page_index WHERE page_id = ?", pageID); err != nil {
+		return fmt.Errorf("delete page %q from index: %w", pageID, err)
+	}
+	if _, err := tx.Exec("DELETE FROM active_page WHERE page_id = ?", pageID); err != nil {
+		return fmt.Errorf("clear active page %q: %w", pageID, err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit deleting page %q from index: %w", pageID, err)
+	}
+	return nil
 }
 
 // CleanIndex removes all page_index and active_page entries for a given iroll name
