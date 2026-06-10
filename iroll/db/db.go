@@ -29,10 +29,32 @@ type Page struct {
 }
 
 type Memory struct {
-	ID         int     `json:"id"`
+	ID         int64   `json:"id"`
+	PageID     string  `json:"page_id"`
+	Name       string  `json:"name"`
+	Question   string  `json:"question"`
 	Content    string  `json:"content"`
-	CreatedAt  string  `json:"created_at"`
 	Importance float64 `json:"importance"`
+	SleepCount int     `json:"sleep_count"`
+	CreatedAt  string  `json:"created_at"`
+	UpdatedAt  string  `json:"updated_at"`
+}
+
+type MemorySummary struct {
+	Name       string `json:"name"`
+	Question   string `json:"question"`
+	ContentLen int    `json:"content_len"`
+	SleepCount int    `json:"sleep_count"`
+}
+
+type QueryMemoryParams struct {
+	Name          string
+	Keyword       string
+	MinImportance float64
+	Since         string
+	Before        string
+	Limit         int
+	Offset        int
 }
 
 type Dna struct {
@@ -177,26 +199,6 @@ func deletePageOnce(db *sql.DB, pageID string) error {
 
 func pageNotFound(pageID string) error {
 	return fmt.Errorf("page %q not found: %w", pageID, ErrPageNotFound)
-}
-
-func InsertMemory(db *sql.DB, content string, importance float64) (*Memory, error) {
-	now := nowISO()
-
-	res, err := db.Exec(
-		"INSERT INTO memory (content, created_at, importance) VALUES (?, ?, ?)",
-		content, now, importance,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("insert memory: %w", err)
-	}
-
-	id, _ := res.LastInsertId()
-	return &Memory{
-		ID:         int(id),
-		Content:    content,
-		CreatedAt:  now,
-		Importance: importance,
-	}, nil
 }
 
 // ResolveContext parses a raw context JSON string and resolves @file and @sql references.

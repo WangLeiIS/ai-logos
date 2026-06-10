@@ -1,11 +1,6 @@
 package cmd
 
 import (
-	"path/filepath"
-
-	"logos/db"
-	"logos/store"
-
 	"github.com/spf13/cobra"
 )
 
@@ -18,30 +13,7 @@ var addMemoryCmd = &cobra.Command{
 	Short: "Add a memory",
 	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		var name string
-		if len(args) > 0 {
-			name = args[0]
-		} else {
-			cwd, _ := filepath.Abs(addMemoryCwd)
-			var err error
-			name, _, err = store.GetActive(cwd)
-			if err != nil {
-				outputError(err.Error())
-			}
-		}
-
-		conn, err := db.Open(checkedDbPath(name))
-		if err != nil {
-			outputError(err.Error())
-		}
-		defer conn.Close()
-
-		mem, err := db.InsertMemory(conn, addMemoryContent, addMemoryImportance)
-		if err != nil {
-			outputError(err.Error())
-		}
-
-		outputJSON(mem)
+		// TODO: rewrite in Task 4
 	},
 }
 
