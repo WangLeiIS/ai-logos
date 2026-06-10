@@ -16,6 +16,9 @@ func InsertMemory(db *sql.DB, pageID, name, question, content string, importance
 	if importance < 0 || importance > 1 {
 		return nil, fmt.Errorf("insert memory: importance must be 0.0-1.0")
 	}
+	if strings.TrimSpace(pageID) == "" {
+		return nil, fmt.Errorf("insert memory: page_id must not be blank")
+	}
 
 	now := nowISO()
 	result, err := db.Exec(`
@@ -102,9 +105,13 @@ func QueryMemory(db *sql.DB, pageID string, params QueryMemoryParams) ([]Memory,
 
 func IncrementSleepCount(db *sql.DB, memoryID int64) error {
 	now := nowISO()
-	_, err := db.Exec("UPDATE memory SET sleep_count = sleep_count + 1, updated_at = ? WHERE id = ?", now, memoryID)
+	result, err := db.Exec("UPDATE memory SET sleep_count = sleep_count + 1, updated_at = ? WHERE id = ?", now, memoryID)
 	if err != nil {
 		return fmt.Errorf("increment sleep count for memory %d: %w", memoryID, err)
+	}
+	n, _ := result.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("increment sleep count: memory %d not found", memoryID)
 	}
 	return nil
 }
@@ -119,12 +126,16 @@ func UpdateMemoryContent(db *sql.DB, memoryID int64, content string, importance 
 	}
 
 	now := nowISO()
-	_, err := db.Exec(
+	result, err := db.Exec(
 		"UPDATE memory SET content = ?, importance = ?, updated_at = ? WHERE id = ?",
 		content, importance, now, memoryID,
 	)
 	if err != nil {
 		return fmt.Errorf("update memory content for %d: %w", memoryID, err)
+	}
+	n, _ := result.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("update memory content: memory %d not found", memoryID)
 	}
 	return nil
 }
