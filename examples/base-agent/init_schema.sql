@@ -7,10 +7,16 @@ CREATE TABLE metadata (
 );
 CREATE TABLE memory (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    page_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    question TEXT NOT NULL,
     content TEXT NOT NULL,
+    importance REAL NOT NULL DEFAULT 0.5,
+    sleep_count INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL,
-    importance REAL DEFAULT 0.5
+    updated_at TEXT NOT NULL
 );
+CREATE INDEX idx_memory_page ON memory(page_id, importance);
 CREATE TABLE dna (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
