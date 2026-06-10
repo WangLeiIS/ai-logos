@@ -1,27 +1,87 @@
 package cmd
 
 import (
+	"path/filepath"
+
+	"logos/db"
+	"logos/store"
+
 	"github.com/spf13/cobra"
 )
 
-var addMemoryContent string
-var addMemoryImportance float64
-var addMemoryCwd string
+var queryMemoryKeyword string
+var queryMemoryMinImportance float64
+var queryMemorySince string
+var queryMemoryBefore string
+var queryMemoryLimit int
+var queryMemoryFull bool
+var queryMemoryCwd string
 
-var addMemoryCmd = &cobra.Command{
-	Use:   "add-memory [name]",
-	Short: "Add a memory",
+var queryMemoryCmd = &cobra.Command{
+	Use:   "query-memory [name]",
+	Short: "Query memories",
 	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		// TODO: rewrite in Task 4
+		cwd, _ := filepath.Abs(queryMemoryCwd)
+		irollName, pageID, err := store.GetActive(cwd)
+		if err != nil {
+			outputError(err.Error())
+		}
+
+		conn, err := db.Open(checkedDbPath(irollName))
+		if err != nil {
+			outputError(err.Error())
+		}
+		defer conn.Close()
+
+		params := db.QueryMemoryParams{
+			MinImportance: queryMemoryMinImportance,
+			Since:         queryMemorySince,
+			Before:        queryMemoryBefore,
+			Limit:         queryMemoryLimit,
+		}
+		if len(args) > 0 {
+			params.Name = args[0]
+		} else if queryMemoryKeyword != "" {
+			params.Keyword = queryMemoryKeyword
+		}
+
+		results, err := db.QueryMemory(conn, pageID, params)
+		if err != nil {
+			outputError(err.Error())
+		}
+
+		if queryMemoryFull {
+			if results == nil {
+				results = []db.Memory{}
+			}
+			outputJSON(results)
+		} else {
+			summaries := make([]db.MemorySummary, len(results))
+			for i, m := range results {
+				summaries[i] = db.MemorySummary{
+					Name:       m.Name,
+					Question:   m.Question,
+					ContentLen: len(m.Content),
+					SleepCount: m.SleepCount,
+				}
+			}
+			if summaries == nil {
+				summaries = []db.MemorySummary{}
+			}
+			outputJSON(summaries)
+		}
 	},
 }
 
 func init() {
-	addMemoryCmd.Flags().StringVar(&addMemoryContent, "content", "", "Memory content")
-	addMemoryCmd.MarkFlagRequired("content")
-	addMemoryCmd.Flags().Float64Var(&addMemoryImportance, "importance", 0.5, "Importance (0.0-1.0)")
-	addMemoryCmd.Flags().StringVar(&addMemoryCwd, "cwd", ".", "Working directory")
+	queryMemoryCmd.Flags().StringVar(&queryMemoryKeyword, "keyword", "", "Search keyword (matches name and question)")
+	queryMemoryCmd.Flags().Float64Var(&queryMemoryMinImportance, "min-importance", 0, "Minimum importance (0.0-1.0)")
+	queryMemoryCmd.Flags().StringVar(&queryMemorySince, "since", "", "Return memories after this ISO timestamp")
+	queryMemoryCmd.Flags().StringVar(&queryMemoryBefore, "before", "", "Return memories before this ISO timestamp")
+	queryMemoryCmd.Flags().IntVar(&queryMemoryLimit, "limit", 20, "Maximum results (1-100)")
+	queryMemoryCmd.Flags().BoolVar(&queryMemoryFull, "full", false, "Return full records including content")
+	queryMemoryCmd.Flags().StringVar(&queryMemoryCwd, "cwd", ".", "Working directory")
 
-	pageCmd.AddCommand(addMemoryCmd)
+	pageCmd.AddCommand(queryMemoryCmd)
 }
