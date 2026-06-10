@@ -70,6 +70,27 @@ func ensureSchema(db *sql.DB) error {
 			created_at  TEXT    NOT NULL
 		);
 		CREATE UNIQUE INDEX IF NOT EXISTS idx_versions_pkg_ver ON versions(package_id, version);
+
+		CREATE VIRTUAL TABLE IF NOT EXISTS packages_fts USING fts5(
+			name,
+			description,
+			tags,
+			content=packages,
+			content_rowid=id
+		);
+
+		CREATE TRIGGER IF NOT EXISTS packages_ai AFTER INSERT ON packages BEGIN
+			INSERT INTO packages_fts(rowid, name, description, tags) VALUES (new.id, new.name, new.description, new.tags);
+		END;
+
+		CREATE TRIGGER IF NOT EXISTS packages_ad AFTER DELETE ON packages BEGIN
+			INSERT INTO packages_fts(packages_fts, rowid, name, description, tags) VALUES('delete', old.id, old.name, old.description, old.tags);
+		END;
+
+		CREATE TRIGGER IF NOT EXISTS packages_au AFTER UPDATE ON packages BEGIN
+			INSERT INTO packages_fts(packages_fts, rowid, name, description, tags) VALUES('delete', old.id, old.name, old.description, old.tags);
+			INSERT INTO packages_fts(rowid, name, description, tags) VALUES (new.id, new.name, new.description, new.tags);
+		END;
 	`)
 	return err
 }
