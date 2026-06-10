@@ -2,6 +2,7 @@ package handler
 
 import (
 	"database/sql"
+	"log"
 	"net/http"
 
 	"irollhub/middleware"
@@ -13,17 +14,18 @@ import (
 
 type PackageHandler struct {
 	db *sql.DB
+	mc *store.MinIOClient
 }
 
-func NewPackageHandler(db *sql.DB) *PackageHandler {
-	return &PackageHandler{db: db}
+func NewPackageHandler(db *sql.DB, mc *store.MinIOClient) *PackageHandler {
+	return &PackageHandler{db: db, mc: mc}
 }
 
 func (h *PackageHandler) List(c *gin.Context) {
 	orgName := c.Param("org")
 	org, err := store.GetOrgByName(h.db, orgName)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error(), "code": "INTERNAL"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error", "code": "INTERNAL"})
 		return
 	}
 	if org == nil {
@@ -33,7 +35,7 @@ func (h *PackageHandler) List(c *gin.Context) {
 	limit, offset := pagination(c, 20, 0)
 	pkgs, err := store.ListPackages(h.db, org.ID, limit, offset)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error(), "code": "INTERNAL"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error", "code": "INTERNAL"})
 		return
 	}
 	if pkgs == nil {
@@ -66,7 +68,7 @@ func (h *PackageHandler) Create(c *gin.Context) {
 	}
 	pkg, err := store.CreatePackage(h.db, authOrg.ID, body.Name, body.Description, body.Tags)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error(), "code": "INTERNAL"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error", "code": "INTERNAL"})
 		return
 	}
 	c.JSON(http.StatusCreated, pkg)
@@ -77,7 +79,7 @@ func (h *PackageHandler) Get(c *gin.Context) {
 	pkgName := c.Param("pkg")
 	org, err := store.GetOrgByName(h.db, orgName)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error(), "code": "INTERNAL"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error", "code": "INTERNAL"})
 		return
 	}
 	if org == nil {
@@ -86,7 +88,7 @@ func (h *PackageHandler) Get(c *gin.Context) {
 	}
 	pkg, err := store.GetPackage(h.db, org.ID, pkgName)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error(), "code": "INTERNAL"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error", "code": "INTERNAL"})
 		return
 	}
 	if pkg == nil {
@@ -122,8 +124,26 @@ func (h *PackageHandler) Delete(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "package not found", "code": "NOT_FOUND"})
 		return
 	}
+
+	// Delete MinIO objects for all versions
+	keys, err := store.ListVersionObjectKeys(h.db, pkg.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error", "code": "INTERNAL"})
+		return
+	}
+	for _, k := range keys {
+		if err := h.mc.Delete(c.Request.Context(), k); err != nil {
+			log.Printf("delete minio object %s: %v", k, err)
+		}
+	}
+
+	// Delete versions then package
+	if err := store.DeleteVersionsByPackage(h.db, pkg.ID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error", "code": "INTERNAL"})
+		return
+	}
 	if err := store.DeletePackage(h.db, authOrg.ID, pkgName); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error(), "code": "INTERNAL"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error", "code": "INTERNAL"})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"deleted": true, "package": pkgName})

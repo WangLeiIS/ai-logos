@@ -2,7 +2,9 @@ package handler
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -17,6 +19,8 @@ import (
 	"golang.org/x/oauth2/github"
 	"golang.org/x/oauth2/google"
 )
+
+const oauthStateCookie = "irollhub_oauth_state"
 
 type AuthHandler struct {
 	db          *sql.DB
@@ -46,12 +50,41 @@ func NewAuthHandler(db *sql.DB, githubClientID, githubClientSecret, googleClient
 
 // GitHub OAuth
 
+func generateState() string {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		panic("failed to generate oauth state: " + err.Error())
+	}
+	return hex.EncodeToString(b)
+}
+
+func setOAuthStateCookie(c *gin.Context, state string) {
+	http.SetCookie(c.Writer, &http.Cookie{
+		Name:     oauthStateCookie,
+		Value:    state,
+		Path:     "/",
+		MaxAge:   600,
+		HttpOnly: true,
+		Secure:   c.Request.TLS != nil,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
 func (h *AuthHandler) GithubStart(c *gin.Context) {
-	url := h.githubOAuth.AuthCodeURL("state", oauth2.AccessTypeOffline)
+	state := generateState()
+	setOAuthStateCookie(c, state)
+	url := h.githubOAuth.AuthCodeURL(state, oauth2.AccessTypeOffline)
 	c.Redirect(http.StatusFound, url)
 }
 
 func (h *AuthHandler) GithubCallback(c *gin.Context) {
+	cookieState, err := c.Cookie(oauthStateCookie)
+	if err != nil || cookieState == "" || cookieState != c.Query("state") {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid oauth state", "code": "BAD_REQUEST"})
+		return
+	}
+	http.SetCookie(c.Writer, &http.Cookie{Name: oauthStateCookie, Value: "", MaxAge: -1, Path: "/"})
+
 	code := c.Query("code")
 	if code == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "missing code parameter", "code": "BAD_REQUEST"})
@@ -73,11 +106,20 @@ func (h *AuthHandler) GithubCallback(c *gin.Context) {
 // Google OAuth
 
 func (h *AuthHandler) GoogleStart(c *gin.Context) {
-	url := h.googleOAuth.AuthCodeURL("state", oauth2.AccessTypeOffline)
+	state := generateState()
+	setOAuthStateCookie(c, state)
+	url := h.googleOAuth.AuthCodeURL(state, oauth2.AccessTypeOffline)
 	c.Redirect(http.StatusFound, url)
 }
 
 func (h *AuthHandler) GoogleCallback(c *gin.Context) {
+	cookieState, err := c.Cookie(oauthStateCookie)
+	if err != nil || cookieState == "" || cookieState != c.Query("state") {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid oauth state", "code": "BAD_REQUEST"})
+		return
+	}
+	http.SetCookie(c.Writer, &http.Cookie{Name: oauthStateCookie, Value: "", MaxAge: -1, Path: "/"})
+
 	code := c.Query("code")
 	if code == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "missing code parameter", "code": "BAD_REQUEST"})
@@ -158,7 +200,7 @@ func (h *AuthHandler) CreateKey(c *gin.Context) {
 
 	rawKey, apiKey, err := store.CreateAPIKey(h.db, org.ID, body.Name)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error(), "code": "INTERNAL"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error", "code": "INTERNAL"})
 		return
 	}
 	c.JSON(http.StatusCreated, gin.H{

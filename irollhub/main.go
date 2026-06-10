@@ -54,7 +54,7 @@ func main() {
 		cfg.OAuth.RedirectBase,
 	)
 	orgH := handler.NewOrgHandler(db)
-	pkgH := handler.NewPackageHandler(db)
+	pkgH := handler.NewPackageHandler(db, mc)
 	verH := handler.NewVersionHandler(db, mc)
 	searchH := handler.NewSearchHandler(db)
 

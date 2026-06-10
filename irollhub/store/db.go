@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"fmt"
+	"log"
 	"strings"
 
 	"irollhub/model"
@@ -212,10 +213,12 @@ func GenerateUniqueOrgName(db *sql.DB, base string) (string, error) {
 	}
 }
 
-func GenerateKey() string {
+func GenerateKey() (string, error) {
 	b := make([]byte, 32)
-	_, _ = rand.Read(b)
-	return "iroll_" + hex.EncodeToString(b)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("generate key: %w", err)
+	}
+	return "iroll_" + hex.EncodeToString(b), nil
 }
 
 func HashKey(raw string) string {
@@ -224,7 +227,10 @@ func HashKey(raw string) string {
 }
 
 func CreateAPIKey(db *sql.DB, orgID int64, name string) (string, *model.APIKey, error) {
-	raw := GenerateKey()
+	raw, err := GenerateKey()
+	if err != nil {
+		return "", nil, fmt.Errorf("create api key: %w", err)
+	}
 	hash := HashKey(raw)
 	now := model.NowISO()
 	res, err := db.Exec(
@@ -348,7 +354,9 @@ func DeletePackage(db *sql.DB, orgID int64, name string) error {
 }
 
 func IncrementDownloads(db *sql.DB, pkgID int64) {
-	db.Exec("UPDATE packages SET downloads = downloads + 1, updated_at = ? WHERE id = ?", model.NowISO(), pkgID)
+	if _, err := db.Exec("UPDATE packages SET downloads = downloads + 1, updated_at = ? WHERE id = ?", model.NowISO(), pkgID); err != nil {
+		log.Printf("increment downloads: %v", err)
+	}
 }
 
 func CreateVersion(db *sql.DB, packageID int64, version, objectKey string, fileSize int64, checksum string) (*model.Version, error) {
@@ -411,6 +419,11 @@ func ListVersions(db *sql.DB, packageID int64, limit, offset int) ([]model.Versi
 	return vers, nil
 }
 
+func DeleteVersionsByPackage(db *sql.DB, packageID int64) error {
+	_, err := db.Exec("DELETE FROM versions WHERE package_id = ?", packageID)
+	return err
+}
+
 func DeleteVersion(db *sql.DB, packageID int64, version string) error {
 	res, err := db.Exec("DELETE FROM versions WHERE package_id = ? AND version = ?", packageID, version)
 	if err != nil {
@@ -440,9 +453,7 @@ func ListVersionObjectKeys(db *sql.DB, packageID int64) ([]string, error) {
 	return keys, nil
 }
 
-// SearchPackages uses FTS5 virtual table. The FTS5 table and triggers
-// are created in Task 10 (search handler). Until then, searches will
-// return empty results or error.
+// SearchPackages uses FTS5 virtual table with BM25 ranking.
 func SearchPackages(db *sql.DB, query string, limit int) ([]model.Package, error) {
 	rows, err := db.Query(`
 		SELECT p.id, p.org_id, p.name, p.description, p.tags, p.downloads, p.created_at, p.updated_at,

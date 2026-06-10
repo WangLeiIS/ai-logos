@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -42,7 +43,7 @@ func setupTestDB(t *testing.T) (*gin.Engine, *store.MinIOClient) {
 	r := gin.New()
 
 	orgH := handler.NewOrgHandler(db)
-	pkgH := handler.NewPackageHandler(db)
+	pkgH := handler.NewPackageHandler(db, mc)
 	verH := handler.NewVersionHandler(db, mc)
 	searchH := handler.NewSearchHandler(db)
 
@@ -75,18 +76,6 @@ func setupTestDB(t *testing.T) (*gin.Engine, *store.MinIOClient) {
 	}
 
 	return r, mc
-}
-
-func createTestOrgAndKey(t *testing.T, db *gin.Engine) (string, string) {
-	t.Helper()
-	// Create org directly via store (bypassing HTTP since orgs need OAuth in production)
-	// Open a temp db connection for setup
-	tmpFile, _ := os.CreateTemp("", "setup-*.db")
-	dbPath := tmpFile.Name()
-	tmpFile.Close()
-	defer os.Remove(dbPath)
-	// Already have the DB from setupTestDB, create org through store
-	return "", ""
 }
 
 // Simple test that doesn't need auth
@@ -200,6 +189,25 @@ func TestAuthRequired(t *testing.T) {
 	}
 }
 
+func newUploadRequest(url, fieldName, fileName string, fileData []byte, version string) (*http.Request, error) {
+	var buf bytes.Buffer
+	w := multipart.NewWriter(&buf)
+	fw, err := w.CreateFormFile(fieldName, fileName)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := fw.Write(fileData); err != nil {
+		return nil, err
+	}
+	if version != "" {
+		w.WriteField("version", version)
+	}
+	w.Close()
+	req := httptest.NewRequest("POST", url, &buf)
+	req.Header.Set("Content-Type", w.FormDataContentType())
+	return req, nil
+}
+
 func makeTestIroll(t *testing.T) []byte {
 	t.Helper()
 	var buf bytes.Buffer
@@ -234,8 +242,13 @@ func TestUploadValidation(t *testing.T) {
 	r.POST("/api/v1/orgs/:org/packages/:pkg/versions", middleware.AuthRequired(db), verH.Upload)
 
 	// Test: invalid ZIP
-	req := httptest.NewRequest("POST", "/api/v1/orgs/uploader/packages/test-pkg/versions", bytes.NewReader([]byte("not a zip")))
-	req.Header.Set("Content-Type", "application/octet-stream")
+	req, err := newUploadRequest(
+		"/api/v1/orgs/uploader/packages/test-pkg/versions",
+		"file", "test.iroll", []byte("not a zip"), "v1.0.0",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
 	req.Header.Set("Authorization", "Bearer "+rawKey)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
@@ -250,8 +263,13 @@ func TestUploadValidation(t *testing.T) {
 	io.WriteString(f, "not a db")
 	zw.Close()
 
-	req = httptest.NewRequest("POST", "/api/v1/orgs/uploader/packages/test-pkg/versions", bytes.NewReader(buf.Bytes()))
-	req.Header.Set("Content-Type", "application/octet-stream")
+	req, err = newUploadRequest(
+		"/api/v1/orgs/uploader/packages/test-pkg/versions",
+		"file", "test.iroll", buf.Bytes(), "v1.0.0",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
 	req.Header.Set("Authorization", "Bearer "+rawKey)
 	w = httptest.NewRecorder()
 	r.ServeHTTP(w, req)
@@ -281,7 +299,8 @@ func TestForbiddenAccess(t *testing.T) {
 	store.CreatePackage(db, 2, "private-pkg", "bob's package", "[]")
 
 	r := gin.New()
-	pkgH := handler.NewPackageHandler(db)
+	mc := (*store.MinIOClient)(nil)
+	pkgH := handler.NewPackageHandler(db, mc)
 	r.DELETE("/api/v1/orgs/:org/packages/:pkg", middleware.AuthRequired(db), pkgH.Delete)
 
 	// Alice tries to delete Bob's package

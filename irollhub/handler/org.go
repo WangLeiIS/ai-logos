@@ -24,7 +24,7 @@ func (h *OrgHandler) List(c *gin.Context) {
 	limit, offset := pagination(c, 20, 0)
 	orgs, err := store.ListOrgs(h.db, limit, offset)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error(), "code": "INTERNAL"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error", "code": "INTERNAL"})
 		return
 	}
 	if orgs == nil {
@@ -43,7 +43,7 @@ func (h *OrgHandler) Get(c *gin.Context) {
 	name := c.Param("org")
 	org, err := store.GetOrgByName(h.db, name)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error(), "code": "INTERNAL"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error", "code": "INTERNAL"})
 		return
 	}
 	if org == nil {

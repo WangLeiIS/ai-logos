@@ -8,7 +8,9 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
+	"regexp"
 
 	"irollhub/middleware"
 	"irollhub/model"
@@ -16,6 +18,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 )
+
+var validVersion = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]{0,99}$`)
 
 const maxUploadSize = 500 << 20 // 500MB
 
@@ -44,7 +48,7 @@ func (h *VersionHandler) List(c *gin.Context) {
 	limit, offset := pagination(c, 20, 0)
 	versions, err := store.ListVersions(h.db, pkg.ID, limit, offset)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error(), "code": "INTERNAL"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error", "code": "INTERNAL"})
 		return
 	}
 	if versions == nil {
@@ -115,11 +119,15 @@ func (h *VersionHandler) Upload(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "version is required", "code": "BAD_REQUEST"})
 		return
 	}
+	if !validVersion.MatchString(version) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid version format", "code": "BAD_REQUEST"})
+		return
+	}
 
 	// Check version conflict
 	existing, err := store.GetVersion(h.db, pkg.ID, version)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error(), "code": "INTERNAL"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error", "code": "INTERNAL"})
 		return
 	}
 	if existing != nil {
@@ -143,7 +151,7 @@ func (h *VersionHandler) Upload(c *gin.Context) {
 	if err != nil {
 		// Cleanup MinIO on DB failure
 		h.mc.Delete(c.Request.Context(), objectKey)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error(), "code": "INTERNAL"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error", "code": "INTERNAL"})
 		return
 	}
 
@@ -233,9 +241,11 @@ func (h *VersionHandler) Delete(c *gin.Context) {
 		return
 	}
 	if err := store.DeleteVersion(h.db, pkg.ID, verName); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error(), "code": "INTERNAL"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error", "code": "INTERNAL"})
 		return
 	}
-	h.mc.Delete(c.Request.Context(), ver.ObjectKey)
+	if err := h.mc.Delete(c.Request.Context(), ver.ObjectKey); err != nil {
+		log.Printf("delete minio object %s: %v", ver.ObjectKey, err)
+	}
 	c.JSON(http.StatusOK, gin.H{"deleted": true, "version": verName})
 }
