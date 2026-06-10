@@ -1,0 +1,14 @@
+listen: ":8080"
+db: "./hub.db"
+minio:
+  endpoint: "localhost:9000"
+  access_key: "minioadmin"
+  secret_key: "minioadmin"
+  bucket: "irollhub"
+  use_ssl: false
+oauth:
+  github_client_id: ""
+  github_client_secret: ""
+  google_client_id: ""
+  google_client_secret: ""
+  redirect_base: "http://localhost:8080"
