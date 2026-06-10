@@ -1,0 +1,25 @@
+{
+  "format": "logos-book",
+  "format_version": 1,
+  "book_id": "6061-T4铝合金激光焊接接头组织与力学性能研究",
+  "title": "6061-T4 铝合金激光焊接接头组织与力学性能研究",
+  "description": "研究汽车用 6061-T4 铝合金激光焊接接头的微观组织、显微硬度、强度和塑性。",
+  "authors": [
+    "王淼",
+    "李天景",
+    "曾一达",
+    "李明亮",
+    "林兆擎"
+  ],
+  "language": "zh-CN",
+  "tags": [
+    "6061 铝合金",
+    "激光焊接",
+    "焊接接头",
+    "微观组织",
+    "力学性能",
+    "焊缝"
+  ],
+  "chunk_count": 6,
+  "search_engine": "keyword-coverage-idf-v1"
+}

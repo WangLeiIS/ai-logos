@@ -33,9 +33,13 @@ func TestQueryBundleScoresCoverageTimesAverageIDF(t *testing.T) {
 
 func TestQueryBundleCountsOneTagAcrossFieldsWithoutFrequency(t *testing.T) {
 	manifest := validManifest("fields-book")
-	chunks := []ChunkRow{{ChunkID: "chunk-1", Content: "content", Position: 0}}
-	index := []IndexRow{{Keyword: "laser", ChunkID: "chunk-1", Fields: []string{"title", "title", "content", "quote"}}}
-	idf := []IDFRow{{Keyword: "laser", IDF: 2, DocumentFrequency: 1}}
+	chunks := []ChunkRow{{ChunkID: "chunk-1", BookID: manifest.BookID, Content: "content", SeqNum: 1}}
+	index := []IndexRow{
+		{ID: "idx-1", Keyword: "laser", ChunkID: "chunk-1", FieldType: "title"},
+		{ID: "idx-2", Keyword: "laser", ChunkID: "chunk-1", FieldType: "content"},
+		{ID: "idx-3", Keyword: "laser", ChunkID: "chunk-1", FieldType: "quote"},
+	}
+	idf := []IDFRow{{Keyword: "laser", IDF: 2, DF: 1}}
 	dir := writeBundleFixture(t, t.TempDir(), manifest, chunks, index, idf)
 
 	results, err := queryBundle(context.Background(), dir, "fields-book", []string{"laser"}, 10)
@@ -62,6 +66,22 @@ func TestQueryBundleRequiresExactNormalizedMatchAndOmitsNoMatch(t *testing.T) {
 	}
 	if len(results) != 0 {
 		t.Fatalf("substring query returned %#v, want no results", results)
+	}
+}
+
+func TestQueryBundleNormalizesStoredKeywords(t *testing.T) {
+	manifest, chunks, index, idf := validBundleRows()
+	index[0].Keyword = " LASER "
+	index[1].Keyword = " LASER "
+	idf[0].Keyword = " LASER "
+	dir := writeBundleFixture(t, t.TempDir(), manifest, chunks, index, idf)
+
+	results, err := queryBundle(context.Background(), dir, manifest.BookID, []string{"laser"}, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 1 || results[0].MatchedKeywords[0] != "laser" {
+		t.Fatalf("queryBundle results = %#v, want normalized stored keyword match", results)
 	}
 }
 
@@ -284,14 +304,16 @@ func TestQueryValidatedBooksCancelsRemainingWorkOnFirstError(t *testing.T) {
 func writeScoringBundle(t *testing.T, root, id string, position int64) string {
 	t.Helper()
 	manifest := validManifest(id)
-	chunks := []ChunkRow{{ChunkID: "chunk-1", Title: "Title", Content: "Original", Position: position}}
+	chunks := []ChunkRow{{ChunkID: "chunk-1", BookID: id, Summary: "Title", Content: "Original", SeqNum: int32(position)}}
 	index := []IndexRow{
-		{Keyword: "laser", ChunkID: "chunk-1", Fields: []string{"title", "content"}},
-		{Keyword: "strength", ChunkID: "chunk-1", Fields: []string{"content", "quote"}},
+		{ID: "idx-1", Keyword: "laser", ChunkID: "chunk-1", FieldType: "title"},
+		{ID: "idx-2", Keyword: "laser", ChunkID: "chunk-1", FieldType: "content"},
+		{ID: "idx-3", Keyword: "strength", ChunkID: "chunk-1", FieldType: "content"},
+		{ID: "idx-4", Keyword: "strength", ChunkID: "chunk-1", FieldType: "quote"},
 	}
 	idf := []IDFRow{
-		{Keyword: "laser", IDF: 2, DocumentFrequency: 1},
-		{Keyword: "strength", IDF: 4, DocumentFrequency: 1},
+		{Keyword: "laser", IDF: 2, DF: 1},
+		{Keyword: "strength", IDF: 4, DF: 1},
 	}
 	return writeBundleFixture(t, root, manifest, chunks, index, idf)
 }
@@ -304,9 +326,9 @@ func writeTieBundle(t *testing.T, root, id string, positions []int64) string {
 	index := make([]IndexRow, 0, len(positions))
 	for _, position := range positions {
 		chunkID := "chunk-" + string(rune('0'+position))
-		chunks = append(chunks, ChunkRow{ChunkID: chunkID, Content: "content", Position: position})
-		index = append(index, IndexRow{Keyword: "tag", ChunkID: chunkID, Fields: []string{"content"}})
+		chunks = append(chunks, ChunkRow{ChunkID: chunkID, BookID: id, Content: "content", SeqNum: int32(position)})
+		index = append(index, IndexRow{ID: "idx-" + chunkID, Keyword: "tag", ChunkID: chunkID, FieldType: "content"})
 	}
-	idf := []IDFRow{{Keyword: "tag", IDF: 1, DocumentFrequency: int64(len(chunks))}}
+	idf := []IDFRow{{Keyword: "tag", IDF: 1, DF: int32(len(chunks))}}
 	return writeBundleFixture(t, root, manifest, chunks, index, idf)
 }

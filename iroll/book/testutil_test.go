@@ -39,10 +39,14 @@ func writeBundleFixture(t *testing.T, root string, manifest Manifest, chunks []C
 func validBundleRows() (Manifest, []ChunkRow, []IndexRow, []IDFRow) {
 	manifest := validManifest("valid-book")
 	chunks := []ChunkRow{{
-		ChunkID: "chunk-1", Title: "Title", Content: "Original content", SourcePath: "source.md", Position: 0,
+		ChunkID: "chunk-1", BookID: manifest.BookID, Content: "Original content",
+		SeqNum: 1, SourceFile: "source.md", EndLine: 1, CharCount: 16, Summary: "Title",
 	}}
-	index := []IndexRow{{Keyword: "laser", ChunkID: "chunk-1", Fields: []string{"title", "content"}}}
-	idf := []IDFRow{{Keyword: "laser", IDF: 2, DocumentFrequency: 1}}
+	index := []IndexRow{
+		{ID: "idx-1", Keyword: "laser", ChunkID: "chunk-1", FieldType: "title"},
+		{ID: "idx-2", Keyword: "laser", ChunkID: "chunk-1", FieldType: "content"},
+	}
+	idf := []IDFRow{{Keyword: "laser", IDF: 2, DF: 1}}
 	return manifest, chunks, index, idf
 }
 

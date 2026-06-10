@@ -62,22 +62,32 @@ One row represents one original chunk returned to agents.
 | Column | Parquet type | Constraint |
 |---|---|---|
 | `chunk_id` | string | Required, non-empty, unique within the book |
-| `title` | string | Required; may be empty |
+| `book_id` | string | Required; must equal manifest `book_id` |
+| `chunk_type` | string | Required; chunk classification |
 | `content` | string | Required, non-empty |
-| `source_path` | string | Required relative path within the bundle; may be empty when unavailable |
-| `position` | int64 | Required, non-negative |
+| `questions` | list<string> | Required; questions answered by the chunk |
+| `title_keywords` | list<string> | Required; title-level retrieval keywords |
+| `content_keywords` | list<string> | Required; content-level retrieval keywords |
+| `quote_keywords` | list<string> | Required; conceptual or quoted retrieval keywords |
+| `seq_num` | int32 | Required, non-negative sequence number |
+| `source_file` | string | Required; source metadata |
+| `start_line` | int32 | Required, non-negative |
+| `end_line` | int32 | Required, no less than `start_line` |
+| `char_count` | int32 | Required, non-negative |
+| `summary` | string | Required; short chunk summary |
 
 ### inverted_index.parquet
 
-One row represents one exact keyword-to-chunk relationship.
+One row represents one exact keyword-to-chunk-field relationship.
 
 | Column | Parquet type | Constraint |
 |---|---|---|
-| `keyword` | string | Required, non-empty, normalized |
+| `id` | string | Required, non-empty, unique |
 | `chunk_id` | string | Required; must exist in `chunks.parquet` |
-| `fields` | list<string> | Required, non-empty; values limited to `title`, `content`, and `quote` |
+| `keyword` | string | Required, non-empty; normalized at validation and query time |
+| `field_type` | string | Required; one of `title`, `content`, and `quote` |
 
-Duplicate `(keyword, chunk_id)` rows are invalid. Multiple fields belong in one row. Keyword frequency does not affect scoring.
+Duplicate normalized `(keyword, chunk_id, field_type)` rows are invalid. Keyword frequency does not affect scoring.
 
 ### idf_stats.parquet
 
@@ -85,9 +95,9 @@ One row represents one keyword's IDF statistics.
 
 | Column | Parquet type | Constraint |
 |---|---|---|
-| `keyword` | string | Required, non-empty, normalized, unique |
+| `keyword` | string | Required, non-empty, unique after normalization |
+| `df` | int32 | Required, non-negative, no greater than `chunk_count` |
 | `idf` | double | Required, finite, non-negative |
-| `document_frequency` | int64 | Required, non-negative, no greater than `chunk_count` |
 
 Every keyword in the inverted index must have one IDF row. Extra IDF rows are allowed.
 
@@ -101,7 +111,7 @@ Query tags are supplied by the calling agent. Matching is exact after normalizat
 - Reject tags that become empty.
 - Deduplicate query tags after normalization.
 
-The bundle builder must store normalized keywords using the same rules. Logos does not perform tokenization, substring matching, fuzzy matching, or synonym expansion.
+Logos normalizes both query tags and stored keywords using the same rules before matching. Logos does not perform tokenization, substring matching, fuzzy matching, or synonym expansion.
 
 ## SQLite Registration
 
@@ -172,6 +182,8 @@ logos book query \
 
 Fast query-time validation checks the manifest identity/version, required files, and expected Parquet schemas. Cross-file integrity is guaranteed by build-time validation and is not repeated for every query.
 
+Parquet schema compatibility is based on required columns by name and compatible physical type. Files may contain additional columns, use logical annotations, and order columns differently.
+
 ## Scoring
 
 For each candidate chunk:
@@ -209,9 +221,9 @@ The CLI returns original chunk content and explainable scoring details:
     {
       "book_id": "aluminum-welding",
       "chunk_id": "aluminum-welding-004",
-      "title": "组织与力学性能",
+      "title": "铝合金激光焊接接头硬度呈 V 型分布，焊缝软化导致强度塑性降低。",
       "content": "原文片段……",
-      "source_path": "source.md",
+      "source_path": "output\\books\\aluminum-welding\\source.md",
       "position": 4,
       "score": 8.42,
       "title_coverage": 0.5,
@@ -247,4 +259,3 @@ Tests cover:
 - Coverage and IDF scoring, including multi-field matches and no frequency effects.
 - Multi-book merge order, limits, and all-or-nothing failure.
 - CLI argument validation and JSON output.
-

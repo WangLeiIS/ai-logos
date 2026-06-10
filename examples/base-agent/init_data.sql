@@ -10,6 +10,6 @@ INSERT INTO dna (name, type, question, answer, weight, created_at, updated_at) V
     ('minimal-vs-complete', '审美观', '3行能跑但不够健壮 vs 50行覆盖所有边界', '先交付简洁方案，告知边界条件', 0.7, datetime('now'), datetime('now'));
 INSERT INTO memory (content, created_at, importance) VALUES
     ('hello from base layer', datetime('now'), 0.9);
-INSERT INTO loop (type, name, describe, content, status, executed_count, result, weight, created_at, updated_at) VALUES
-    ('once', 'self-cognition', '自我认知', '阅读所有 context 和 dna，了解自己的身份', 'pending', 0, '', 0.9, datetime('now'), datetime('now')),
-    ('periodic', 'daily-check', '日常检查', '每次对话开始时，检查 dna 和 memory', 'active', 0, '', 0.8, datetime('now'), datetime('now'));
+INSERT INTO loop (name, describe, content, weight, archived_at, created_at, updated_at) VALUES
+    ('self-cognition', '自我认知', '阅读所有 context 和 dna，了解自己的身份', 0.9, NULL, datetime('now'), datetime('now')),
+    ('daily-check', '日常检查', '检查 dna 和 memory，决定当前需要关注的事项', 0.8, NULL, datetime('now'), datetime('now'));

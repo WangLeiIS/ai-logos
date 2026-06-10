@@ -4,7 +4,9 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	"logos/safepath"
@@ -46,7 +48,14 @@ func nowISO() string {
 }
 
 func Open(dbPath string) (*sql.DB, error) {
-	return sql.Open("sqlite3", dbPath)
+	path, rawQuery, _ := strings.Cut(dbPath, "?")
+	query, err := url.ParseQuery(rawQuery)
+	if err != nil {
+		return nil, fmt.Errorf("parse sqlite DSN: %w", err)
+	}
+	query.Del("_fk")
+	query.Set("_foreign_keys", "on")
+	return sql.Open("sqlite3", path+"?"+query.Encode())
 }
 
 func InsertPage(db *sql.DB, cwd string) (*Page, error) {
@@ -155,10 +164,13 @@ func InsertMemory(db *sql.DB, content string, importance float64) (*Memory, erro
 // ResolveContext parses a raw context JSON string and resolves @file and @sql references.
 // irollPath is the root directory of the iroll package (e.g. ~/.iroll/my-agent/).
 // db is the opened ai_roll.db connection for SQL queries.
-func ResolveContext(rawContext string, irollPath string, db *sql.DB) (string, error) {
+func ResolveContext(rawContext string, irollPath string, db *sql.DB, pageID string) (string, error) {
 	var raw map[string]interface{}
 	if err := json.Unmarshal([]byte(rawContext), &raw); err != nil {
 		// Not valid JSON, return as-is
+		return rawContext, nil
+	}
+	if raw == nil {
 		return rawContext, nil
 	}
 
@@ -170,6 +182,12 @@ func ResolveContext(rawContext string, irollPath string, db *sql.DB) (string, er
 		}
 		resolved[k] = value
 	}
+
+	loop, err := BuildLoopContext(db, pageID)
+	if err != nil {
+		return "", err
+	}
+	resolved["loop"] = loop
 
 	out, err := json.Marshal(resolved)
 	if err != nil {

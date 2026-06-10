@@ -1,8 +1,8 @@
-# Logos — AI Agent 记忆管理系统
+# Logos — AI Agent 状态与知识管理系统
 
 ## 1. 项目定位
 
-Logos 是一个 AI agent 的记忆管理工具。它提供了一种标准化的包格式 `.iroll`（智能卷轴）来存储 agent 的全部状态：记忆、技能、知识和资源。通过 `logos` 命令行工具，agent 可以加载、构建、管理和共享这些记忆包。
+Logos 是一个 AI agent 的状态与知识管理工具。它提供标准化的 `.iroll`（智能卷轴）包格式，用于存储 agent 的人格、记忆、运行循环、知识和资源。通过 `logos` 命令行工具，agent 可以加载、构建、管理和共享这些包。
 
 **核心原则：里面不集成任何 agent 的能力。让 agent 用我们。**
 
@@ -114,8 +114,20 @@ agent.iroll (ZIP)
 
 | 表 | 说明 |
 |----|------|
-| book | 知识书籍（待定义，对应 Resources/books/ 目录） |
+| book | 已注册 Book Bundle 的元数据与资源路径 |
 | skill | 技能（待定义，对应 Resources/skills/ 目录） |
+
+Book Bundle 的内容存储在 `Resources/books/<book-id>/`，SQLite `book` 表仅保存用于列举、检查和定位资源的元数据。每个 Bundle 必须包含：
+
+```text
+Resources/books/<book-id>/
+├── manifest.json
+├── chunks.parquet
+├── inverted_index.parquet
+└── idf_stats.parquet
+```
+
+构建时会完整校验 Bundle 并同步 `book` 表。查询时由 agent 提供精确标签，Logos 返回原文片段和可解释评分；Logos 不提取标签，也不生成答案。完整格式见 [Book Search Design](superpowers/specs/2026-06-09-book-search-design.md)。
 
 ### 3.4 其他部分
 
@@ -202,6 +214,7 @@ agent.iroll (ZIP)
 | `logos page get-context [name] [--page <id>] [--cwd .]` | 获取上下文（返回解析后的实际值） |
 | `logos page update-context [name] --content <json> [--page <id>] [--cwd .]` | 更新上下文（存储原始 JSON 标记） |
 | `logos page add-memory [name] --content <text> [--importance 0.5] [--cwd .]` | 新增记忆 |
+| `logos page query-dna <name-keyword> [--type <type>] [--cwd .]` | 按名称模糊查询 DNA，可按维度过滤 |
 
 **省略模式：** `page new` 后自动设为活跃页面，后续命令可省略 name 和 --page，自动使用当前 cwd 的活跃页面。
 
@@ -215,11 +228,23 @@ agent.iroll (ZIP)
 | MIGRATE | `MIGRATE <file.sql>` | 执行 SQL（建表、改字段、插数据） |
 | COPY | `COPY <src> <dest>` | 复制文件到 Resources/ |
 
+构建完成所有 Layerfile 指令后，会自动发现、校验并注册 `Resources/books/` 下的 Book Bundle。任何无效 Bundle 都会使构建失败。
+
+### 5.5 知识书籍
+
+| 命令 | 说明 |
+|------|------|
+| `logos book list [name] [--cwd .]` | 列出 iroll 中已注册的书籍 |
+| `logos book inspect <book-id> [name] [--cwd .]` | 查看书籍元数据 |
+| `logos book query --book <id>... --tag <tag>... [--limit 10] [--per-book-limit 5] [--cwd .]` | 按精确标签检索书籍原文片段 |
+
+`book query` 使用当前 cwd 的活跃 iroll。`--book` 与 `--tag` 可重复传入；标签会去除首尾空白、将英文转为小写并去重。
+
 ## 6. 技术栈
 
 - Go 1.24, Cobra CLI 框架
 - SQLite（go-sqlite3, CGO）
-- 纯标准库（无第三方运行时依赖）
+- Parquet（parquet-go）
 
 ## 7. 路线图
 
@@ -227,7 +252,7 @@ agent.iroll (ZIP)
 
 - [x] .iroll 包格式定义（ZIP + SQLite）
 - [x] system.db 全局页面索引 + 按 cwd 追踪活跃页面
-- [x] CLI 命令体系（status / roll / page 三大类）
+- [x] CLI 命令体系（status / roll / page / book）
 - [x] context 标准化格式（纯字符串 / @file / @sql 三种值类型，读时解析）
 - [x] 模板页面（page_id='0'）继承机制
 - [x] 页面管理（new / current / list / switch / delete / get-context / update-context / add-memory）
@@ -235,16 +260,16 @@ agent.iroll (ZIP)
 - [x] 构建历史追踪
 - [x] dna 表（决策 DNA：认知观/伦理观/审美观/本体观）
 - [x] loop 表（循环任务：一次性/周期）
+- [x] 路径安全校验（iroll 名称、资源路径、ZIP 解压、符号链接）
+- [x] Book Bundle v1（Parquet 校验、构建注册、多书标签检索）
 
 ### 待做
 
 - [ ] loop 命令行支持（list/finish/add）
 - [ ] 遗忘表定义
-- [ ] book 表 + Resources/books/ 知识检索
 - [ ] skill 表 + Resources/skills/ 技能管理
 - [ ] 记忆检索（按重要性/关键词查询）
 - [ ] 基础信息获取完善
 - [ ] engine（心跳）机制
 - [ ] 前端界面
 - [ ] 斜杠命令表
-

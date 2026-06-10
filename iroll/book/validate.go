@@ -40,13 +40,17 @@ func ValidateBundle(bundleDir string) (*Bundle, error) {
 		if strings.TrimSpace(chunk.Content) == "" {
 			return nil, fmt.Errorf("chunk %q content must not be empty", chunk.ChunkID)
 		}
-		if chunk.Position < 0 {
-			return nil, fmt.Errorf("chunk %q position must be non-negative", chunk.ChunkID)
+		if chunk.BookID != manifest.BookID {
+			return nil, fmt.Errorf("chunk %q book_id %q does not match manifest book_id %q", chunk.ChunkID, chunk.BookID, manifest.BookID)
 		}
-		if chunk.SourcePath != "" {
-			if err := optionalExistingPathWithin(bundleDir, chunk.SourcePath); err != nil {
-				return nil, fmt.Errorf("chunk %q source_path: %w", chunk.ChunkID, err)
-			}
+		if chunk.SeqNum < 0 {
+			return nil, fmt.Errorf("chunk %q seq_num must be non-negative", chunk.ChunkID)
+		}
+		if chunk.StartLine < 0 || chunk.EndLine < chunk.StartLine {
+			return nil, fmt.Errorf("chunk %q has invalid line range", chunk.ChunkID)
+		}
+		if chunk.CharCount < 0 {
+			return nil, fmt.Errorf("chunk %q char_count must be non-negative", chunk.ChunkID)
 		}
 	}
 	if manifest.ChunkCount != int64(len(chunks)) {
@@ -55,57 +59,56 @@ func ValidateBundle(bundleDir string) (*Bundle, error) {
 
 	indexKeywords := make(map[string]struct{})
 	indexChunkIDs := make(map[string]map[string]struct{})
-	indexPairs := make(map[string]struct{}, len(index))
+	indexEntries := make(map[string]struct{}, len(index))
+	indexIDs := make(map[string]struct{}, len(index))
 	for _, row := range index {
-		if row.Keyword == "" {
-			return nil, fmt.Errorf("index keyword must not be empty")
+		if strings.TrimSpace(row.ID) == "" {
+			return nil, fmt.Errorf("index id must not be empty")
 		}
-		if row.Keyword != NormalizeKeyword(row.Keyword) {
-			return nil, fmt.Errorf("index keyword %q is not normalized", row.Keyword)
+		if _, exists := indexIDs[row.ID]; exists {
+			return nil, fmt.Errorf("duplicate index id %q", row.ID)
+		}
+		indexIDs[row.ID] = struct{}{}
+		if strings.TrimSpace(row.Keyword) == "" {
+			return nil, fmt.Errorf("index keyword must not be empty")
 		}
 		if _, exists := chunkIDs[row.ChunkID]; !exists {
 			return nil, fmt.Errorf("index keyword %q references unknown chunk %q", row.Keyword, row.ChunkID)
 		}
-		pair := row.Keyword + "\x00" + row.ChunkID
-		if _, exists := indexPairs[pair]; exists {
-			return nil, fmt.Errorf("duplicate index pair for keyword %q and chunk %q", row.Keyword, row.ChunkID)
+		entry := NormalizeKeyword(row.Keyword) + "\x00" + row.ChunkID + "\x00" + row.FieldType
+		if _, exists := indexEntries[entry]; exists {
+			return nil, fmt.Errorf("duplicate index entry for keyword %q, chunk %q, and field %q", row.Keyword, row.ChunkID, row.FieldType)
 		}
-		indexPairs[pair] = struct{}{}
-		if len(row.Fields) == 0 {
-			return nil, fmt.Errorf("index keyword %q fields must not be empty", row.Keyword)
+		indexEntries[entry] = struct{}{}
+		if row.FieldType != "title" && row.FieldType != "content" && row.FieldType != "quote" {
+			return nil, fmt.Errorf("index keyword %q has invalid field_type %q", row.Keyword, row.FieldType)
 		}
-		for _, field := range row.Fields {
-			if field != "title" && field != "content" && field != "quote" {
-				return nil, fmt.Errorf("index keyword %q has invalid field %q", row.Keyword, field)
-			}
+		keyword := NormalizeKeyword(row.Keyword)
+		indexKeywords[keyword] = struct{}{}
+		if indexChunkIDs[keyword] == nil {
+			indexChunkIDs[keyword] = make(map[string]struct{})
 		}
-		indexKeywords[row.Keyword] = struct{}{}
-		if indexChunkIDs[row.Keyword] == nil {
-			indexChunkIDs[row.Keyword] = make(map[string]struct{})
-		}
-		indexChunkIDs[row.Keyword][row.ChunkID] = struct{}{}
+		indexChunkIDs[keyword][row.ChunkID] = struct{}{}
 	}
 
 	idfKeywords := make(map[string]struct{}, len(idf))
 	for _, row := range idf {
-		if row.Keyword == "" {
+		if strings.TrimSpace(row.Keyword) == "" {
 			return nil, fmt.Errorf("IDF keyword must not be empty")
 		}
-		if row.Keyword != NormalizeKeyword(row.Keyword) {
-			return nil, fmt.Errorf("IDF keyword %q is not normalized", row.Keyword)
-		}
-		if _, exists := idfKeywords[row.Keyword]; exists {
+		keyword := NormalizeKeyword(row.Keyword)
+		if _, exists := idfKeywords[keyword]; exists {
 			return nil, fmt.Errorf("duplicate IDF keyword %q", row.Keyword)
 		}
-		idfKeywords[row.Keyword] = struct{}{}
+		idfKeywords[keyword] = struct{}{}
 		if math.IsNaN(row.IDF) || math.IsInf(row.IDF, 0) || row.IDF < 0 {
 			return nil, fmt.Errorf("keyword %q has invalid idf %v", row.Keyword, row.IDF)
 		}
-		if row.DocumentFrequency < 0 || row.DocumentFrequency > manifest.ChunkCount {
-			return nil, fmt.Errorf("keyword %q has invalid document_frequency %d", row.Keyword, row.DocumentFrequency)
+		if row.DF < 0 || int64(row.DF) > manifest.ChunkCount {
+			return nil, fmt.Errorf("keyword %q has invalid df %d", row.Keyword, row.DF)
 		}
-		if chunks := indexChunkIDs[row.Keyword]; row.DocumentFrequency != int64(len(chunks)) {
-			return nil, fmt.Errorf("keyword %q document_frequency %d does not match unique indexed chunks %d", row.Keyword, row.DocumentFrequency, len(chunks))
+		if chunks := indexChunkIDs[keyword]; int64(row.DF) != int64(len(chunks)) {
+			return nil, fmt.Errorf("keyword %q df %d does not match unique indexed chunks %d", row.Keyword, row.DF, len(chunks))
 		}
 	}
 	for keyword := range indexKeywords {

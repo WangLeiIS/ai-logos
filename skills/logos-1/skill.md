@@ -1,17 +1,17 @@
 ---
 name: logos-1
 description: |
-  Use the logos CLI tool to manage AI agent memory, iroll packages, and pages.
+  Use the logos CLI tool to manage AI agent state, knowledge, iroll packages, and pages.
   Invoke this skill whenever you need to persist conversation context, load an agent's personality,
   create a new memory page, or interact with .iroll packages. This includes: initializing the logos system,
   building or loading iroll packages, creating/switching/deleting pages, reading page context to determine
-  how to behave, updating context, and saving memories. Use this skill for ANY task involving logos,
-  iroll, page management, agent memory, or persistent context across conversations.
+  how to behave, updating context, saving memories, and querying registered books. Use this skill for
+  ANY task involving logos, iroll, page management, agent memory, knowledge, or persistent context.
 ---
 
-# Logos — AI Agent Memory Management
+# Logos — AI Agent State and Knowledge Management
 
-Logos is a CLI tool that gives you persistent memory. It stores your personality, context, and memories in `.iroll` packages (SQLite databases). Each conversation session uses a "page" — a record that holds your context (behavioral instructions) and links to your memory store.
+Logos is a CLI tool for persistent agent state and knowledge. It stores personality, context, memories, and registered knowledge resources in `.iroll` packages. Each conversation session uses a "page" — a record that holds behavioral context and links to the iroll.
 
 The core workflow: **load an iroll → create a page → read its context → follow those instructions → save memories as you go.**
 
@@ -108,6 +108,18 @@ logos page switch <page-id>
 logos page delete <page-id>
 ```
 
+### Query registered books
+
+The calling agent extracts exact tags from the user's question, then asks Logos to retrieve original chunks. Logos performs deterministic retrieval; use the returned chunks to answer the user.
+
+```bash
+logos book list --cwd .
+logos book inspect <book-id> --cwd .
+logos book query --book <book-id> --tag <tag> --tag <tag> --cwd .
+```
+
+Use repeated `--book` flags for multi-book search. Do not pass the full natural-language question as a tag unless it is intentionally indexed as one exact tag.
+
 ## Command Reference
 
 | Command | Purpose |
@@ -125,10 +137,13 @@ logos page delete <page-id>
 | `logos page list [name] [--cwd .]` | List pages |
 | `logos page switch <page-id>` | Switch active page |
 | `logos page delete <page-id>` | Delete a page |
-| `logos page get-context [--page <id>] [--cwd .]` | Get page context |
-| `logos page update-context --content <json> [--page <id>] [--cwd .]` | Update page context |
-| `logos page add-memory --content <text> [--importance 0.5] [--cwd .]` | Add a memory |
+| `logos page get-context [name] [--page <id>] [--cwd .]` | Get page context |
+| `logos page update-context [name] --content <json> [--page <id>] [--cwd .]` | Update page context |
+| `logos page add-memory [name] --content <text> [--importance 0.5] [--cwd .]` | Add a memory |
 | `logos page query-dna <name> [--type <type>] [--cwd .]` | Fuzzy search dna by name |
+| `logos book list [name] [--cwd .]` | List registered books |
+| `logos book inspect <book-id> [name] [--cwd .]` | Inspect registered book metadata |
+| `logos book query --book <id>... --tag <tag>... [--limit 10] [--per-book-limit 5] [--cwd .]` | Retrieve original chunks by exact tags |
 
 ## Key Concepts
 
@@ -143,5 +158,6 @@ logos page delete <page-id>
 - **dna** — decision-making Q&A pairs defining agent behavior. Context loads questions only (no answers); use `query-dna` to retrieve full records on demand
 - **loop** — operational task list defining agent's run patterns. Two types: `once` (pending→done) and `periodic` (always active with executed_count). Each loop has a name, description, and full content instruction
 - **memory** — timestamped records with importance scores, stored per iroll
+- **book** — a build-validated knowledge bundle under `Resources/books/`; queried using explicit exact tags
 
 When `get-context` or `page new` returns context, `@file` and `@sql` references are already resolved to actual values. When `update-context` writes context, it stores raw JSON with markers — resolution happens at read time.

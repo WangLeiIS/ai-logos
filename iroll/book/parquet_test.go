@@ -18,7 +18,7 @@ func TestReadTypedParquetFiles(t *testing.T) {
 		t.Fatalf("ReadChunks() = %#v, %v", gotChunks, err)
 	}
 	gotIndex, err := ReadIndex(dir)
-	if err != nil || len(gotIndex) != 1 || gotIndex[0].Keyword != "laser" {
+	if err != nil || len(gotIndex) != 2 || gotIndex[0].Keyword != "laser" {
 		t.Fatalf("ReadIndex() = %#v, %v", gotIndex, err)
 	}
 	gotIDF, err := ReadIDF(dir)
@@ -49,6 +49,30 @@ func TestFastValidateRejectsWrongSchema(t *testing.T) {
 	}
 	if _, err := FastValidate(dir); err == nil {
 		t.Fatal("FastValidate accepted incompatible chunks schema")
+	}
+}
+
+func TestFastValidateAllowsExtraAndReorderedParquetColumns(t *testing.T) {
+	manifest, chunks, index, idf := validBundleRows()
+	dir := writeBundleFixture(t, t.TempDir(), manifest, chunks, index, idf)
+	type extendedIDFRow struct {
+		Extra   string  `parquet:"extra"`
+		IDF     float64 `parquet:"idf,optional"`
+		Keyword string  `parquet:"keyword,optional"`
+		DF      int32   `parquet:"df,optional"`
+	}
+	if err := parquet.WriteFile(filepath.Join(dir, idfFile), []extendedIDFRow{{
+		Extra: "metadata", IDF: 2, Keyword: "laser", DF: 1,
+	}}); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := FastValidate(dir); err != nil {
+		t.Fatalf("FastValidate rejected compatible schema with extra and reordered columns: %v", err)
+	}
+	got, err := ReadIDF(dir)
+	if err != nil || len(got) != 1 || got[0].Keyword != "laser" {
+		t.Fatalf("ReadIDF() = %#v, %v", got, err)
 	}
 }
 

@@ -14,23 +14,33 @@ type Manifest struct {
 }
 
 type ChunkRow struct {
-	ChunkID    string `parquet:"chunk_id"`
-	Title      string `parquet:"title"`
-	Content    string `parquet:"content"`
-	SourcePath string `parquet:"source_path"`
-	Position   int64  `parquet:"position"`
+	ChunkID         string   `parquet:"chunk_id,optional"`
+	BookID          string   `parquet:"book_id,optional"`
+	ChunkType       string   `parquet:"chunk_type,optional"`
+	Content         string   `parquet:"content,optional"`
+	Questions       []string `parquet:"questions,list,optional"`
+	TitleKeywords   []string `parquet:"title_keywords,list,optional"`
+	ContentKeywords []string `parquet:"content_keywords,list,optional"`
+	QuoteKeywords   []string `parquet:"quote_keywords,list,optional"`
+	SeqNum          int32    `parquet:"seq_num,optional"`
+	SourceFile      string   `parquet:"source_file,optional"`
+	StartLine       int32    `parquet:"start_line,optional"`
+	EndLine         int32    `parquet:"end_line,optional"`
+	CharCount       int32    `parquet:"char_count,optional"`
+	Summary         string   `parquet:"summary,optional"`
 }
 
 type IndexRow struct {
-	Keyword string   `parquet:"keyword"`
-	ChunkID string   `parquet:"chunk_id"`
-	Fields  []string `parquet:"fields,list"`
+	ID        string `parquet:"id,optional"`
+	ChunkID   string `parquet:"chunk_id,optional"`
+	Keyword   string `parquet:"keyword,optional"`
+	FieldType string `parquet:"field_type,optional"`
 }
 
 type IDFRow struct {
-	Keyword           string  `parquet:"keyword"`
-	IDF               float64 `parquet:"idf"`
-	DocumentFrequency int64   `parquet:"document_frequency"`
+	Keyword string  `parquet:"keyword,optional"`
+	DF      int32   `parquet:"df,optional"`
+	IDF     float64 `parquet:"idf,optional"`
 }
 
 type Bundle struct {

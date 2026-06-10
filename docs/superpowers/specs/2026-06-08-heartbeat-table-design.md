@@ -1,5 +1,7 @@
 # Heartbeat 表设计
 
+> **已废弃：** 本设计已被 [Loop 表重命名设计](2026-06-08-loop-table-rename.md) 替代。当前实现和使用文档统一使用 `loop`；本文仅保留为历史设计记录。
+
 ## 1. 概念定位
 
 heartbeat 是 agent 的待办任务表。记录 agent 需要执行的事项，分为两种类型：

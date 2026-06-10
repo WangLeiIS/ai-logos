@@ -142,17 +142,19 @@ func writeCommandBookBundle(t *testing.T, rollRoot string) {
 		t.Fatal(err)
 	}
 	if err := parquet.WriteFile(filepath.Join(dir, "chunks.parquet"), []book.ChunkRow{{
-		ChunkID: "chunk-one", Title: "Laser", Content: "Original content", Position: 0,
+		ChunkID: "chunk-one", BookID: "book-one", Summary: "Laser", Content: "Original content", SeqNum: 1,
 	}}); err != nil {
 		t.Fatal(err)
 	}
 	if err := parquet.WriteFile(filepath.Join(dir, "inverted_index.parquet"), []book.IndexRow{{
-		Keyword: "laser", ChunkID: "chunk-one", Fields: []string{"title", "content"},
+		ID: "idx-title", Keyword: "laser", ChunkID: "chunk-one", FieldType: "title",
+	}, {
+		ID: "idx-content", Keyword: "laser", ChunkID: "chunk-one", FieldType: "content",
 	}}); err != nil {
 		t.Fatal(err)
 	}
 	if err := parquet.WriteFile(filepath.Join(dir, "idf_stats.parquet"), []book.IDFRow{{
-		Keyword: "laser", IDF: 2, DocumentFrequency: 1,
+		Keyword: "laser", IDF: 2, DF: 1,
 	}}); err != nil {
 		t.Fatal(err)
 	}

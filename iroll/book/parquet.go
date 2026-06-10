@@ -104,29 +104,39 @@ func validateParquetSchema[T any](file *os.File) error {
 		return err
 	}
 	expected := parquet.SchemaOf(new(T))
-	if !sameFields(expected.Fields(), actual.Schema().Fields()) {
-		return fmt.Errorf("incompatible schema")
+	if err := requireFields(expected.Fields(), actual.Schema().Fields(), ""); err != nil {
+		return fmt.Errorf("incompatible schema: %w", err)
 	}
 	return nil
 }
 
-func sameFields(expected, actual []parquet.Field) bool {
-	if len(expected) != len(actual) {
-		return false
+// requireFields validates the fields required by the reader while allowing a
+// Parquet file to contain additional metadata columns or use a different order.
+func requireFields(required, actual []parquet.Field, prefix string) error {
+	actualByName := make(map[string]parquet.Field, len(actual))
+	for _, field := range actual {
+		actualByName[field.Name()] = field
 	}
-	for i := range expected {
-		a, b := expected[i], actual[i]
-		if a.Name() != b.Name() || a.Leaf() != b.Leaf() ||
-			a.Optional() != b.Optional() || a.Repeated() != b.Repeated() {
-			return false
+
+	for _, want := range required {
+		path := want.Name()
+		if prefix != "" {
+			path = prefix + "." + path
 		}
-		if a.Leaf() {
-			if a.Type().String() != b.Type().String() {
-				return false
+		got, exists := actualByName[want.Name()]
+		if !exists {
+			return fmt.Errorf("missing required field %q", path)
+		}
+		if want.Leaf() != got.Leaf() || want.Repeated() != got.Repeated() {
+			return fmt.Errorf("field %q has incompatible structure", path)
+		}
+		if want.Leaf() {
+			if want.Type().Kind() != got.Type().Kind() {
+				return fmt.Errorf("field %q has type %s, want %s", path, got.Type(), want.Type())
 			}
-		} else if !sameFields(a.Fields(), b.Fields()) {
-			return false
+		} else if err := requireFields(want.Fields(), got.Fields(), path); err != nil {
+			return err
 		}
 	}
-	return true
+	return nil
 }

@@ -117,7 +117,7 @@ var pageNewCmd = &cobra.Command{
 			outputError(err.Error())
 		}
 
-		p.Context, err = db.ResolveContext(p.Context, checkedIrollPath(name), conn)
+		p.Context, err = db.ResolveContext(p.Context, checkedIrollPath(name), conn, p.PageID)
 		if err != nil {
 			outputError(err.Error())
 		}

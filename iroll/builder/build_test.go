@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"logos/book"
@@ -236,6 +237,172 @@ func TestBuildCheckpointsWALBeforeCopyingToStore(t *testing.T) {
 	}
 }
 
+func TestBuildBaseAgentContainsLoopSchema(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+
+	layerfile, err := ParseLayerfile(filepath.Join("..", "..", "examples", "base-agent", "Layerfile"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := Build(layerfile, "loop-schema-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn, err := sql.Open("sqlite3", filepath.Join(result.Path, "ai_roll.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	conn.SetMaxOpenConns(1)
+	if _, err := conn.Exec("PRAGMA foreign_keys = ON"); err != nil {
+		t.Fatal(err)
+	}
+	var foreignKeysEnabled int
+	if err := conn.QueryRow("PRAGMA foreign_keys").Scan(&foreignKeysEnabled); err != nil {
+		t.Fatal(err)
+	}
+	if foreignKeysEnabled != 1 {
+		t.Fatalf("foreign_keys = %d, want 1", foreignKeysEnabled)
+	}
+
+	assertTableColumns(t, conn, "loop", []string{
+		"id", "name", "describe", "content", "weight", "archived_at", "created_at", "updated_at",
+	})
+	assertTableColumns(t, conn, "loop_runs", []string{
+		"id", "loop_id", "page_id", "parent_run_id",
+		"seed_name", "seed_describe", "seed_content", "seed_weight",
+		"status", "plan", "progress", "result", "reflection", "abort_reason",
+		"started_at", "ended_at", "reflected_at", "updated_at",
+	})
+	assertIndexExists(t, conn, "idx_loop_runs_page_status")
+	assertIndexExists(t, conn, "idx_loop_runs_parent_status")
+	assertIndexExists(t, conn, "idx_loop_runs_loop_started")
+	assertIndexColumns(t, conn, "idx_loop_runs_loop_started", []string{"loop_id ASC", "id DESC"})
+	assertIndexExists(t, conn, "idx_loop_runs_one_active_main")
+
+	assertExecFails(t, conn, `
+		INSERT INTO loop (name, describe, content, weight, created_at, updated_at)
+		VALUES ('invalid-weight', 'invalid weight', 'invalid weight', 1.1, datetime('now'), datetime('now'))
+	`)
+
+	mainRunID := insertLoopRun(t, conn, 1, "page-one", nil, "active")
+	insertLoopRun(t, conn, 1, "page-one", nil, "completed")
+	insertLoopRun(t, conn, 1, "page-one", mainRunID, "active")
+
+	assertLoopRunInsertFails(t, conn, 1, "page-one", nil, "active")
+	assertLoopRunInsertFails(t, conn, 1, "page-two", nil, "pending")
+	assertLoopRunInsertFails(t, conn, 9999, "page-two", nil, "active")
+	assertLoopRunInsertFails(t, conn, 1, "page-two", int64(9999), "active")
+}
+
+func assertTableColumns(t *testing.T, conn *sql.DB, table string, want []string) {
+	t.Helper()
+	rows, err := conn.Query(`PRAGMA table_info(` + table + `)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	var got []string
+	for rows.Next() {
+		var cid, notNull, pk int
+		var name, columnType string
+		var defaultValue any
+		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &pk); err != nil {
+			t.Fatal(err)
+		}
+		got = append(got, name)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("%s columns = %#v, want %#v", table, got, want)
+	}
+}
+
+func assertIndexExists(t *testing.T, conn *sql.DB, name string) {
+	t.Helper()
+	var count int
+	if err := conn.QueryRow(
+		`SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = ?`, name,
+	).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("index %q does not exist", name)
+	}
+}
+
+func assertIndexColumns(t *testing.T, conn *sql.DB, name string, want []string) {
+	t.Helper()
+	rows, err := conn.Query(`PRAGMA index_xinfo(` + name + `)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	var got []string
+	for rows.Next() {
+		var seqno, cid, desc, collKey int
+		var columnName, collation sql.NullString
+		if err := rows.Scan(&seqno, &cid, &columnName, &desc, &collation, &collKey); err != nil {
+			t.Fatal(err)
+		}
+		if collKey == 1 && cid >= 0 {
+			direction := "ASC"
+			if desc != 0 {
+				direction = "DESC"
+			}
+			got = append(got, columnName.String+" "+direction)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("index %q columns = %#v, want %#v", name, got, want)
+	}
+}
+
+func insertLoopRun(t *testing.T, conn *sql.DB, loopID int64, pageID string, parentRunID any, status string) int64 {
+	t.Helper()
+	result, err := conn.Exec(`
+		INSERT INTO loop_runs (
+			loop_id, page_id, parent_run_id,
+			seed_name, seed_describe, seed_content, seed_weight,
+			status, started_at, updated_at
+		) VALUES (?, ?, ?, 'seed', 'seed', 'seed', 0.5, ?, datetime('now'), datetime('now'))
+	`, loopID, pageID, parentRunID, status)
+	if err != nil {
+		t.Fatalf("insert loop run: %v", err)
+	}
+	id, err := result.LastInsertId()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
+func assertLoopRunInsertFails(t *testing.T, conn *sql.DB, loopID int64, pageID string, parentRunID any, status string) {
+	t.Helper()
+	_, err := conn.Exec(`
+		INSERT INTO loop_runs (
+			loop_id, page_id, parent_run_id,
+			seed_name, seed_describe, seed_content, seed_weight,
+			status, started_at, updated_at
+		) VALUES (?, ?, ?, 'seed', 'seed', 'seed', 0.5, ?, datetime('now'), datetime('now'))
+	`, loopID, pageID, parentRunID, status)
+	if err == nil {
+		t.Fatalf("invalid loop run insert succeeded: loop_id=%d page_id=%q parent_run_id=%v status=%q",
+			loopID, pageID, parentRunID, status)
+	}
+}
+
+func assertExecFails(t *testing.T, conn *sql.DB, query string) {
+	t.Helper()
+	if _, err := conn.Exec(query); err == nil {
+		t.Fatal("invalid SQL execution succeeded")
+	}
+}
+
 func isolatedBuildHome(t *testing.T) string {
 	t.Helper()
 	home := t.TempDir()
@@ -265,17 +432,17 @@ func writeBuilderBook(t *testing.T, booksDir, id string, valid bool) {
 		return
 	}
 	if err := parquet.WriteFile(filepath.Join(dir, "chunks.parquet"), []book.ChunkRow{{
-		ChunkID: "chunk-1", Content: "Original content", Position: 0,
+		ChunkID: "chunk-1", BookID: id, Content: "Original content", SeqNum: 1,
 	}}); err != nil {
 		t.Fatal(err)
 	}
 	if err := parquet.WriteFile(filepath.Join(dir, "inverted_index.parquet"), []book.IndexRow{{
-		Keyword: "laser", ChunkID: "chunk-1", Fields: []string{"content"},
+		ID: "idx-1", Keyword: "laser", ChunkID: "chunk-1", FieldType: "content",
 	}}); err != nil {
 		t.Fatal(err)
 	}
 	if err := parquet.WriteFile(filepath.Join(dir, "idf_stats.parquet"), []book.IDFRow{{
-		Keyword: "laser", IDF: 1, DocumentFrequency: 1,
+		Keyword: "laser", IDF: 1, DF: 1,
 	}}); err != nil {
 		t.Fatal(err)
 	}

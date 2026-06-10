@@ -47,8 +47,9 @@ func queryBundle(ctx context.Context, bundleDir, bookID string, tags []string, l
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		if _, matched := tagSet[row.Keyword]; matched {
-			idfByKeyword[row.Keyword] = row.IDF
+		keyword := NormalizeKeyword(row.Keyword)
+		if _, matched := tagSet[keyword]; matched {
+			idfByKeyword[keyword] = row.IDF
 		}
 		return nil
 	}); err != nil {
@@ -59,10 +60,11 @@ func queryBundle(ctx context.Context, bundleDir, bookID string, tags []string, l
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		if _, matched := tagSet[row.Keyword]; !matched {
+		keyword := NormalizeKeyword(row.Keyword)
+		if _, matched := tagSet[keyword]; !matched {
 			return nil
 		}
-		if _, exists := idfByKeyword[row.Keyword]; !exists {
+		if _, exists := idfByKeyword[keyword]; !exists {
 			return fmt.Errorf("missing IDF row for matched keyword %q", row.Keyword)
 		}
 		state := states[row.ChunkID]
@@ -73,16 +75,14 @@ func queryBundle(ctx context.Context, bundleDir, bookID string, tags []string, l
 			}
 			states[row.ChunkID] = state
 		}
-		state.matched[row.Keyword] = struct{}{}
-		for _, field := range row.Fields {
-			switch field {
-			case "title":
-				state.title[row.Keyword] = struct{}{}
-			case "content":
-				state.content[row.Keyword] = struct{}{}
-			case "quote":
-				state.quote[row.Keyword] = struct{}{}
-			}
+		state.matched[keyword] = struct{}{}
+		switch row.FieldType {
+		case "title":
+			state.title[keyword] = struct{}{}
+		case "content":
+			state.content[keyword] = struct{}{}
+		case "quote":
+			state.quote[keyword] = struct{}{}
 		}
 		return nil
 	}); err != nil {
@@ -125,8 +125,8 @@ func queryBundle(ctx context.Context, bundleDir, bookID string, tags []string, l
 		avgIDF := idfSum / float64(len(state.matched))
 		score := (titleCoverage*10 + contentCoverage*5 + quoteCoverage) * avgIDF
 		results = append(results, Result{
-			BookID: bookID, ChunkID: chunk.ChunkID, Title: chunk.Title, Content: chunk.Content,
-			SourcePath: chunk.SourcePath, Position: chunk.Position, Score: score,
+			BookID: bookID, ChunkID: chunk.ChunkID, Title: chunk.Summary, Content: chunk.Content,
+			SourcePath: chunk.SourceFile, Position: int64(chunk.SeqNum), Score: score,
 			TitleCoverage: titleCoverage, ContentCoverage: contentCoverage,
 			QuoteCoverage: quoteCoverage, AvgIDF: avgIDF, MatchedKeywords: matched,
 		})
