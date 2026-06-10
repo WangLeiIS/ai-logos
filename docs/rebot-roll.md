@@ -55,7 +55,9 @@ agent.iroll (ZIP)
 | created_at | TEXT | NOT NULL | 创建时间 |
 | updated_at | TEXT | NOT NULL | 更新时间 |
 
-**loop 表结构：**
+**loop 表结构（循环种子）：**
+
+loop 表定义循环任务的「种子」——即任务的静态定义。每次执行时会创建一条 `loop_runs` 记录，快照种子的 name/describe/content/weight。
 
 | 字段 | 类型 | 约束 | 说明 |
 |------|------|------|------|
@@ -112,12 +114,32 @@ Logos 只管理上下文和记录，不执行任务。读取 page context 时会
 
 **解析规则：** `@file` 和 `@sql` 在读取时（`get-context`、`page new`）解析为实际值。写入时（`update-context`）存储原始标记，不做解析。
 
+**loop 自动注入：** `get-context` 和 `page new` 会自动在 context 中注入一个 `loop` 字段，包含当前页面的循环上下文：
+
+```json
+{
+  "loop": {
+    "focus": {
+      "main": { "run_id": 1, "seed_name": "self-cognition", "status": "active", "plan": "...", "progress": "..." },
+      "children": []
+    },
+    "available": [
+      { "id": 1, "name": "self-cognition", "describe": "自我认知", "weight": 0.9, "stats": { "active": 0, "completed": 5, "aborted": 0 } },
+      { "id": 2, "name": "daily-check", "describe": "日常检查", "weight": 0.8, "stats": { "active": 0, "completed": 3, "aborted": 0 } }
+    ]
+  }
+}
+```
+
+- `focus`：当前页面活跃的运行（主运行 + 子运行）
+- `available`：所有未归档的种子及其运行统计
+
 ### 3.3 知识部分
 
 | 表 | 说明 |
 |----|------|
 | book | 已注册 Book Bundle 的元数据与资源路径 |
-| skill | 技能（待定义，对应 Resources/skills/ 目录） |
+| skill | 已注册技能的元数据（见第 9 节） |
 
 Book Bundle 的内容存储在 `Resources/books/<book-id>/`，SQLite `book` 表仅保存用于列举、检查和定位资源的元数据。每个 Bundle 必须包含：
 
@@ -284,9 +306,142 @@ logos loop current|history|show ...
 ### 待做
 
 - [ ] 遗忘表定义
-- [ ] skill 表 + Resources/skills/ 技能管理
+- [ ] skill 表 + Resources/skills/ 技能管理（设计已完成，待实现）
 - [ ] 记忆检索（按重要性/关键词查询）
-- [ ] 基础信息获取完善
 - [ ] engine（心跳）机制
 - [ ] 前端界面
-- [ ] 斜杠命令表
+
+## 8. 记忆生命周期
+
+### 8.1 context 溢出 → memory 快照
+
+页面 context 随对话增长，当超过阈值时触发快照：
+
+1. **快照**：将当前完整 context 作为一条 memory 存入，importance 由当时的上下文重要性决定
+2. **压缩**：page 的 context 被压缩为摘要，保留关键结构
+3. **循环**：压缩后的 context 继续增长，再次超阈值时重复快照 → 压缩
+
+```
+context 增长 → 超阈值 → 快照存入 memory → context 压缩为摘要 → 继续增长 → ...
+```
+
+memory 表中会积累多轮快照，每条代表一个历史阶段。
+
+### 8.2 sleep 循环 — 记忆整理
+
+`sleep` 是一个内置的 loop 种子，在 agent 闲置时运行。它遍历 memory 中的每条记录，执行整理：
+
+1. **提取核心结构**：从每条 memory 中提炼最重要的信息，保留在 memory 中（原地更新或替换为精简版）
+2. **遗忘次要细节**：将不重要的部分移入 forget 表，标记遗忘原因和时间
+
+```
+memory ──sleep 整理──→ memory（精简的核心）+ forget（被遗忘的细节）
+```
+
+**forget 表（待定义）将存储：** 被遗忘的内容原文、来源 memory ID、遗忘原因、遗忘时间。数据不删除，只是从活跃记忆中移出，需要时可检索恢复。
+
+### 8.3 更新后的表结构
+
+**memory 表结构（更新）：**
+
+| 字段 | 类型 | 约束 | 说明 |
+|------|------|------|------|
+| id | INTEGER | PRIMARY KEY AUTOINCREMENT | 主键 |
+| page_id | TEXT | NOT NULL | 所属页面 |
+| type | TEXT | NOT NULL | `snapshot`（context 溢出快照）/ `note`（手动添加） |
+| content | TEXT | NOT NULL | 记忆内容（sleep 整理后可能被替换为精简版） |
+| importance | REAL | NOT NULL DEFAULT 0.5 | 重要度 0.0-1.0 |
+| created_at | TEXT | NOT NULL | 创建时间 |
+| updated_at | TEXT | NOT NULL | 更新时间（sleep 整理时更新） |
+
+**forget 表结构（新增）：**
+
+| 字段 | 类型 | 约束 | 说明 |
+|------|------|------|------|
+| id | INTEGER | PRIMARY KEY AUTOINCREMENT | 主键 |
+| memory_id | INTEGER | NOT NULL FK → memory(id) | 来源记忆 |
+| page_id | TEXT | NOT NULL | 所属页面 |
+| content | TEXT | NOT NULL | 被遗忘的原始内容 |
+| reason | TEXT | | 遗忘原因 |
+| forgotten_at | TEXT | NOT NULL | 遗忘时间 |
+
+## 9. 技能系统 skill
+
+### 9.1 概念定位
+
+在整个 Logos 体系中，各模块各司其职：
+
+| 模块 | 本质 | 触发方式 |
+|------|------|----------|
+| dna | 性格 | 被动（决策时参考） |
+| loop | 习惯 | 自动（循环执行） |
+| memory | 经历 | 被动（回忆时检索） |
+| book | 知识 | 被动（提问时查阅） |
+| **skill** | **能力** | **按需（匹配时调用）** |
+
+Skill 是 agent 可调用的能力单元。和 loop 的区别：loop 是自动循环执行的任务，skill 是 agent 根据当前情境主动选择使用的能力。
+
+### 9.2 文件结构
+
+每个 skill 存储在 `Resources/skills/<skill-name>/` 目录下：
+
+```text
+Resources/skills/<skill-name>/
+├── skill.md          # 必需：技能定义（名称、触发描述、指令）
+├── scripts/          # 可选：附带脚本
+└── references/       # 可选：参考文档
+```
+
+**skill.md 格式：**
+
+```markdown
+---
+name: skill-name
+description: 触发描述，说明什么时候应该使用这个技能
+---
+
+# 技能标题
+
+具体的指令内容，告诉 agent 如何执行这个能力。
+可以引用 scripts/ 和 references/ 中的资源。
+```
+
+### 9.3 skill 表结构
+
+构建时扫描 `Resources/skills/`，校验每个 skill.md 并注册到 skill 表：
+
+| 字段 | 类型 | 约束 | 说明 |
+|------|------|------|------|
+| id | INTEGER | PRIMARY KEY AUTOINCREMENT | 主键 |
+| name | TEXT | NOT NULL UNIQUE | 技能标识，对应目录名 |
+| description | TEXT | NOT NULL | 触发描述（从 skill.md frontmatter 读取） |
+| path | TEXT | NOT NULL | skill.md 相对路径，如 `Resources/skills/my-skill/skill.md` |
+| weight | REAL | NOT NULL DEFAULT 0.5 | 优先级权重 |
+| archived_at | TEXT | | 归档时间 |
+| created_at | TEXT | NOT NULL | 创建时间 |
+| updated_at | TEXT | NOT NULL | 更新时间 |
+
+### 9.4 工作流程
+
+```
+构建时：Resources/skills/ → 校验 skill.md → 注册 skill 表
+使用时：agent 读取 skill 列表 → 匹配当前情境 → 加载对应 skill.md → 执行
+```
+
+1. **注册**：构建 iroll 时自动扫描 `Resources/skills/`，校验每个目录下必须有 `skill.md` 且 frontmatter 包含 name 和 description，通过后写入 skill 表
+2. **发现**：agent 通过 CLI 查询 skill 列表，获取 name 和 description
+3. **匹配**：agent 根据 description 判断当前情境需要哪个 skill
+4. **加载**：读取对应 skill.md 的完整内容，按指令执行
+5. **执行**：可调用 scripts/ 中的脚本，参考 references/ 中的文档
+
+### 9.5 与 context 的集成
+
+skill 的 description 可通过 `@sql` 注入到 context 中，让 agent 在每次对话开始时就了解自己有哪些能力：
+
+```json
+{
+  "skills": {"@sql": "SELECT name, description FROM skill WHERE archived_at IS NULL ORDER BY weight DESC"}
+}
+```
+
+agent 在 context 中看到技能列表，根据用户请求匹配对应的 skill，再按需加载完整指令。
