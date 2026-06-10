@@ -5,33 +5,17 @@ import (
 	"os"
 	"strings"
 
+	"irollhub/model"
+
 	"gopkg.in/yaml.v3"
 )
 
-// MinIOConfig holds MinIO storage configuration
-type MinIOConfig struct {
-	Endpoint  string `yaml:"endpoint"`
-	AccessKey string `yaml:"access_key"`
-	SecretKey string `yaml:"secret_key"`
-	Bucket    string `yaml:"bucket"`
-	UseSSL    bool   `yaml:"use_ssl"`
-}
-
-// OAuthConfig holds OAuth provider configuration
-type OAuthConfig struct {
-	GithubClientID     string `yaml:"github_client_id"`
-	GithubClientSecret string `yaml:"github_client_secret"`
-	GoogleClientID     string `yaml:"google_client_id"`
-	GoogleClientSecret string `yaml:"google_client_secret"`
-	RedirectBase       string `yaml:"redirect_base"`
-}
-
 // Config holds the application configuration
 type Config struct {
-	Listen string      `yaml:"listen"`
-	DB     string      `yaml:"db"`
-	MinIO  MinIOConfig `yaml:"minio"`
-	OAuth  OAuthConfig `yaml:"oauth"`
+	Listen string           `yaml:"listen"`
+	DB     string           `yaml:"db"`
+	MinIO  model.MinIOConfig `yaml:"minio"`
+	OAuth  model.OAuthConfig `yaml:"oauth"`
 }
 
 // LoadConfig loads configuration from config.yaml and overrides with environment variables
