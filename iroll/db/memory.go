@@ -7,6 +7,7 @@ import (
 )
 
 func InsertMemory(db *sql.DB, pageID, name, question, content string, importance float64) (*Memory, error) {
+	pageID = strings.TrimSpace(pageID)
 	name = strings.TrimSpace(name)
 	question = strings.TrimSpace(question)
 	content = strings.TrimSpace(content)
