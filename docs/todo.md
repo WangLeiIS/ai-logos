@@ -26,19 +26,19 @@ irollhub 是产品本身，CLI 只是运行时。
 - [x] irollhub 最小版本 — 上传、下载、列表、搜索（14 个 task 全部完成）
 - [x] .iroll 包版本管理 — 语义化版本校验、重复检测、checksum
 - [x] 包发现机制 — FTS5 搜索、标签、下载量统计
-- [ ] logos CLI 接入 irollhub — login/logout、push、pull、search 命令
+- [x] logos CLI 接入 irollhub — login/logout、push、pull、search 命令
 
 ## 第四阶段：体验优化
 
 - [ ] Agent Loop 使用协议 — 明确 agent 如何从 context 自主选择、更新和结束 loop；Logos 不负责调度
 - [ ] context 压缩策略 — 溢出时的摘要算法
-- [ ] 前端界面 — 可视化管理 iroll 包、页面、记忆
+- [x] 前端界面 — irollhub-web React 前端（浏览、搜索、包详情）
 
 ## 当前建议顺序
 
 1. 冻结 `.iroll` v1 协议，并增加明确的 schema version 校验。
 2. 制作并真实使用一个 demo `.iroll`，优先验证 dna、loop、memory、book、skill 的组合体验。
-3. 将 Logos CLI 接入 irollhub，完成包的发现、下载和发布闭环。
+3. ~~将 Logos CLI 接入 irollhub，完成包的发现、下载和发布闭环。~~ ✅ 已完成
 4. 根据真实使用反馈再决定 forget、context 压缩和前端的优先级。
 
 暂不在 Logos 内实现 loop 自动调度。Agent 自主决定做什么，Logos 只管理上下文和生命记录。

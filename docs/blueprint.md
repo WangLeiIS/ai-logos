@@ -267,7 +267,7 @@ Logos 定义了 agent 和状态管理之间的边界：
 - **Memory 写入入口尚未接入 context 压缩。** 当前已有 page 隔离的查询与 DB 写入/整理 API，但没有自动压缩流程。
 - **Forget 尚未实现。** 记忆整理目前没有归档次要细节的持久化目标。
 - **Skill 注册与查询尚未实现。** `Resources/skills/` 是协议方向，不是当前运行时能力。
-- **Logos CLI 尚未接入 irollhub。** irollhub API 服务已经存在，但 `login/push/pull/search` 仍是未来命令。
+- **Logos CLI 已接入 irollhub。** 支持 `login/logout/push/pull/search` 命令，完成包的发现、下载和发布闭环。
 - **@sql 无权限隔离。** Context 中的 SQL 查询直接执行，不做安全沙箱。包的制作者拥有完全信任。
 
 详细技术规格见 [rebot-roll.md](rebot-roll.md)。
