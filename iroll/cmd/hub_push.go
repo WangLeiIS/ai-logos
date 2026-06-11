@@ -237,16 +237,17 @@ func createIrollZip(sourcePath, destPath string) error {
 		if err != nil {
 			return err
 		}
-		defer srcFile.Close()
 
 		// 在 ZIP 中创建文件
 		dest, err := zipWriter.Create(relPath)
 		if err != nil {
+			srcFile.Close()
 			return err
 		}
 
 		// 复制内容
 		_, err = io.Copy(dest, srcFile)
+		srcFile.Close()
 		return err
 	})
 }
