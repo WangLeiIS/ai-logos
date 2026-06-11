@@ -69,6 +69,7 @@ var loginCmd = &cobra.Command{
 		if err != nil {
 			outputError(fmt.Sprintf("Network error: %v", err))
 		}
+		// resp is guaranteed non-nil after successful retry
 		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
