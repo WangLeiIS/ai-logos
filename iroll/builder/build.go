@@ -14,6 +14,7 @@ import (
 	"logos/book"
 	"logos/db"
 	"logos/safepath"
+	"logos/skill"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -84,6 +85,15 @@ func Build(lf *Layerfile, tagName string) (*BuildResult, error) {
 	if err := db.SyncBooks(conn, bundles); err != nil {
 		_ = conn.Close()
 		return nil, fmt.Errorf("sync books: %w", err)
+	}
+	skills, err := skill.Discover(tmpDir)
+	if err != nil {
+		_ = conn.Close()
+		return nil, fmt.Errorf("validate skills: %w", err)
+	}
+	if err := db.SyncSkills(conn, skills); err != nil {
+		_ = conn.Close()
+		return nil, fmt.Errorf("sync skills: %w", err)
 	}
 	if err := checkpointAndCloseSQLite(conn); err != nil {
 		return nil, fmt.Errorf("persist books: %w", err)
