@@ -67,9 +67,8 @@ var pullCmd = &cobra.Command{
 		if err != nil {
 			outputError(fmt.Sprintf("Network error: %v", err))
 		}
-		if resp != nil {
-			defer resp.Body.Close()
-		}
+		// 错误检查后保证 resp 非空
+		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
 			apiErr := parseAPIError(resp)
