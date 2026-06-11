@@ -7,7 +7,9 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.44
 	github.com/parquet-go/parquet-go v0.30.1
 	github.com/spf13/cobra v1.10.2
+	github.com/spf13/pflag v1.0.9
 	golang.org/x/sys v0.38.0
+	gopkg.in/ini.v1 v1.67.3
 )
 
 require (
@@ -17,8 +19,6 @@ require (
 	github.com/parquet-go/bitpack v1.0.0 // indirect
 	github.com/parquet-go/jsonlite v1.0.0 // indirect
 	github.com/pierrec/lz4/v4 v4.1.21 // indirect
-	github.com/spf13/pflag v1.0.9 // indirect
 	github.com/twpayne/go-geom v1.6.1 // indirect
 	google.golang.org/protobuf v1.34.2 // indirect
-	gopkg.in/ini.v1 v1.67.3 // indirect
 )

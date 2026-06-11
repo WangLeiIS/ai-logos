@@ -2,8 +2,10 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -102,21 +104,32 @@ func isNetworkError(err error) bool {
 	if err == nil {
 		return false
 	}
-	// 检查是否为网络相关的错误
-	// 超时、连接拒绝、DNS 失败等
-	errStr := err.Error()
-	networkErrors := []string{
-		"timeout",
-		"connection refused",
-		"no such host",
-		"connection reset",
-		"eof",
+
+	// Check for timeout errors
+	if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+		return true
 	}
-	for _, msg := range networkErrors {
-		if strings.Contains(strings.ToLower(errStr), msg) {
+
+	// Check for temporary errors
+	if netErr, ok := err.(net.Error); ok && netErr.Temporary() {
+		return true
+	}
+
+	// Check for specific error types
+	var opErr *net.OpError
+	if errors.As(err, &opErr) {
+		return true
+	}
+
+	// Fallback to string matching
+	errStr := strings.ToLower(err.Error())
+	networkKeywords := []string{"connection refused", "no such host", "connection reset"}
+	for _, keyword := range networkKeywords {
+		if strings.Contains(errStr, keyword) {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -182,8 +195,8 @@ func readConfig() (*HubConfig, error) {
 	var configHubURL, configToken string
 	for _, section := range cfg.Sections() {
 		if strings.HasPrefix(section.Name(), "hub ") {
-			hubName := strings.Trim(section.Name(), "hub \"")
-			hubName = strings.TrimSuffix(hubName, "\"")
+			hubName := strings.TrimPrefix(section.Name(), "hub ")
+			hubName = strings.Trim(hubName, "\"")
 			configHubURL = hubName
 			configToken = section.Key("token").String()
 			break
