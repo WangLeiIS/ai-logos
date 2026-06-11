@@ -128,10 +128,11 @@ var pushCmd = &cobra.Command{
 			outputError(fmt.Sprintf("Failed to write form: %v", err))
 		}
 
+		writer.WriteField("version", version)
 		writer.Close()
 
 		// 发送请求
-		uploadPath := fmt.Sprintf("/api/v1/orgs/%s/packages/%s/versions?version=%s", org, pkg, version)
+		uploadPath := fmt.Sprintf("/api/v1/orgs/%s/packages/%s/versions", org, pkg)
 
 		var resp *http.Response
 		err = retry(func() error {
