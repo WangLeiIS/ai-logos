@@ -5,7 +5,7 @@ description: |
   Invoke this skill whenever you need to persist conversation context, load an agent's personality,
   create a new memory page, or interact with .iroll packages. This includes: initializing the logos system,
   building or loading iroll packages, creating/switching/deleting pages, reading page context to determine
-  how to behave, updating context, saving memories, and querying registered books. Use this skill for
+  how to behave, updating context, querying page memories, and querying registered books. Use this skill for
   ANY task involving logos, iroll, page management, agent memory, knowledge, or persistent context.
 ---
 
@@ -13,7 +13,7 @@ description: |
 
 Logos is a CLI tool for persistent agent state and knowledge. It stores personality, context, memories, and registered knowledge resources in `.iroll` packages. Each conversation session uses a "page" — a record that holds behavioral context and links to the iroll.
 
-The core workflow: **load an iroll → create a page → read its context → follow those instructions → save memories as you go.**
+The core workflow: **load an iroll → create a page → read its context → follow those instructions → query and record structured state as needed.**
 
 ## Startup Sequence
 
@@ -70,15 +70,14 @@ The `context` field is a JSON string. Parse it and follow the instructions insid
 
 ## During Conversation
 
-### Save important information as memories
-
-When the user shares preferences, facts, or instructions worth remembering:
+### Query page memories
 
 ```bash
-logos page add-memory --content "用户喜欢简洁的回复风格" --importance 0.8 --cwd .
+logos page query-memory --keyword "Python" --cwd .
+logos page query-memory user-prefers-python --full --cwd .
 ```
 
-Importance ranges from 0.0 to 1.0. Use higher values (0.7-1.0) for critical information, lower values (0.1-0.5) for minor details.
+Memory is isolated by page. Summary output omits `content`; add `--full` when the complete record is needed. Logos currently has no manual `add-memory` CLI; memory creation is reserved for future context compression and DB-level integrations.
 
 ### Update page context
 
@@ -153,7 +152,7 @@ Each page has an independent active main run. Child runs use `--parent <main-run
 | `logos page delete <page-id>` | Delete a page |
 | `logos page get-context [name] [--page <id>] [--cwd .]` | Get page context |
 | `logos page update-context [name] --content <json> [--page <id>] [--cwd .]` | Update page context |
-| `logos page add-memory [name] --content <text> [--importance 0.5] [--cwd .]` | Add a memory |
+| `logos page query-memory [name] [--keyword <text>] [--min-importance <n>] [--since <ts>] [--before <ts>] [--limit <n>] [--full] [--cwd .]` | Query current-page memories |
 | `logos page query-dna <name> [--type <type>] [--cwd .]` | Fuzzy search dna by name |
 | `logos book list [name] [--cwd .]` | List registered books |
 | `logos book inspect <book-id> [name] [--cwd .]` | Inspect registered book metadata |
@@ -176,7 +175,7 @@ Each page has an independent active main run. Child runs use `--parent <main-run
 - **dna** — decision-making Q&A pairs defining agent behavior. Context loads questions only (no answers); use `query-dna` to retrieve full records on demand
 - **loop seed** — reusable behavioral intention the agent may choose; it has no global execution status
 - **loop run** — page-scoped plan, progress, result, and reflection record. Logos records it but never executes the work
-- **memory** — timestamped records with importance scores, stored per iroll
+- **memory** — page-scoped Q&A-style experience records with importance and sleep-processing count
 - **book** — a build-validated knowledge bundle under `Resources/books/`; queried using explicit exact tags
 
 When `get-context` or `page new` returns context, `@file` and `@sql` references are already resolved to actual values. When `update-context` writes context, it stores raw JSON with markers — resolution happens at read time.

@@ -107,7 +107,7 @@ logos page switch <page-id>           # 切换页面
 logos page delete <page-id>           # 删除页面
 logos page get-context [name] [--page <id>] [--cwd .]      # 获取上下文（已解析）
 logos page update-context [name] --content <json> [--page <id>] [--cwd .]
-logos page add-memory [name] --content <text> [--importance 0.5] [--cwd .]
+logos page query-memory [name] [--keyword <text>] [--full] [--cwd .]
 logos page query-dna <name> [--type <type>] [--cwd .]      # 查询 dna（模糊匹配）
 ```
 
@@ -153,7 +153,7 @@ COPY logo.png img/       # 复制资源文件
 | loop | 可复用行为种子（name, content, weight, archived_at） |
 | loop_runs | page 独立的运行状态与不可变生命记录 |
 | pages | 页面上下文（page_id, context） |
-| memory | 记忆存储（content, importance） |
+| memory | page 隔离的问答式记忆（name, question, content, importance, sleep_count） |
 | book | Book Bundle 元数据和资源路径 |
 | history | 构建历史 |
 
@@ -178,6 +178,7 @@ ai-logos/
 │   ├── safepath/             # 路径安全校验
 │   ├── store/                # 存储管理
 │   └── go.mod
+├── irollhub/                 # .iroll 注册中心 HTTP 服务（独立 Go module）
 ├── examples/                 # 示例
 │   ├── base-agent/           # 基础 agent 模板
 │   │   └── books/            # 示例 Book Bundle
@@ -189,6 +190,8 @@ ai-logos/
 ```
 
 当前使用说明以本 README 和 `docs/rebot-roll.md` 为准。`docs/superpowers/` 保存带日期的设计与实施记录，其中可能包含已经被后续设计替代的历史术语和计划状态。
+
+当前 Logos CLI 尚未接入 irollhub。`login/push/pull/search` 是下一阶段能力，不属于现有命令。
 
 ## 技术栈
 

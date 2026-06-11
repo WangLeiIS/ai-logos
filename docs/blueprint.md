@@ -54,9 +54,9 @@ Layerfile ──logos build──→ .iroll ──logos load──→ ~/.iroll/
 |------|------|------|----------|
 | 性格 | dna | 价值观 | ai_roll.db `dna` 表 |
 | 习惯 | loop | 条件反射 | ai_roll.db `loop` + `loop_runs` 表 |
-| 经历 | memory | 日记 | ai_roll.db `memory` / `forget` 表 |
+| 经历 | memory | 日记 | ai_roll.db `memory` 表；`forget` 尚未实现 |
 | 知识 | book | 书架 | Resources/books/ |
-| 能力 | skill | 手艺 | Resources/skills/ |
+| 能力 | skill | 手艺 | Resources/skills/（协议方向，尚未自动注册或发现） |
 
 它们的关系：
 
@@ -66,7 +66,7 @@ Layerfile ──logos build──→ .iroll ──logos load──→ ~/.iroll/
           │  (当前对话的工作记忆)               │
           │                                  │
           │   ┌─── dna（决策时参考）            │
-          │   ├─── loop（自动执行的任务）       │
+          │   ├─── loop（自主选择的行为种子）    │
           │   ├─── memory（回忆过去的经历）     │
           │   ├─── book（查阅相关知识）         │
           │   └─── skill（调用具体能力）        │
@@ -91,9 +91,9 @@ Agent 在每次对话开始时读取 context，就获得了「我是谁、我在
 Layerfile + 资源文件 ──logos roll build──→ .iroll 包
 ```
 
-Layerfile 只有三条指令：`FROM`（继承基础层）、`MIGRATE`（执行 SQL）、`COPY`（复制资源）。构建完成后自动注册 book 和 skill。
+Layerfile 只有三条指令：`FROM`（继承基础层）、`MIGRATE`（执行 SQL）、`COPY`（复制资源）。当前构建完成后会自动校验并注册 book；skill 注册尚未实现。
 
-构建产出的 `.iroll` 包就是 agent 的「出厂设置」— 包含初始的人格（dna）、习惯（loop）、知识（book）、能力（skill），但还没有任何记忆。
+构建产出的 `.iroll` 包就是 agent 的「出厂设置」— 包含初始的人格（dna）、习惯（loop）、知识（book）以及可选的原始 skill 资源，但还没有任何记忆。当前运行时不会自动注册或发现 skill。
 
 ### 阶段二：加载（Load）
 
@@ -121,7 +121,7 @@ agent.iroll ──logos roll load──→ ~/.iroll/agent-name/
 - `description`：我的职责描述（来自 metadata）
 - `dna`：我的决策维度和选择倾向（摘要：仅 question，answer 按需查询）
 - `loop`：我需要关注的循环任务（focus = 正在执行的，available = 可用的）
-- `skills`：我能调用的能力列表（摘要：仅 name + description）
+- （未来）`skills`：我能调用的能力列表（摘要：仅 name + description）；当前尚未注入
 - 以及任何通过 `@file` 和 `@sql` 注入的自定义字段
 
 **对话过程中：**
@@ -129,15 +129,15 @@ agent.iroll ──logos roll load──→ ~/.iroll/agent-name/
 - 需要做决策时 → `logos page query-dna` 查询 DNA
 - 需要查知识时 → `logos book query` 检索书籍
 - 需要用能力时 → 加载对应 skill.md 执行
-- 需要记东西时 → `logos page add-memory` 保存记忆
+- 需要回忆时 → `logos page query-memory` 查询当前 page 的记忆
 - context 变化时 → `logos page update-context` 更新上下文
-- 需要执行循环任务时 → start/update/complete loop run
+- 自主选择要做的事情时 → `logos loop run/update/complete/abort` 记录过程
 
 ### 阶段四：记忆管理（Memory Lifecycle）
 
 对话不是孤立的。随着对话累积，agent 的状态持续演化。
 
-Context 有最大值限制。当对话增长导致 context 接近上限时：
+未来的 context 压缩能力会在对话增长接近上限时执行：
 
 ```
 对话增长
@@ -147,11 +147,11 @@ context 接近最大值？
   └─ 是 → 快照存入 memory → context 压缩为摘要 → 继续
 ```
 
-压缩保留关键结构，丢弃冗余细节。被压缩的内容不会丢失 — 完整快照已存入 memory，后续仍可检索。
+该能力尚未实现。目标是让压缩保留关键结构，并将完整快照写入 memory，后续仍可通过 `query-memory` 检索。
 
 **每个 page 的记忆是隔离的。** Page A 的 memory 和 Page B 互不影响。同一个 agent 在不同项目中工作，各自积累各自的经历。
 
-当 agent 闲置时，`sleep` 循环自动运行，整理记忆：
+未来可以由 agent 自主选择 `sleep` loop 来整理记忆：
 
 ```
 sleep 整理：
@@ -160,7 +160,7 @@ sleep 整理：
     → 次要细节移入 forget
 ```
 
-遗忘不是删除。forget 表保留原始数据，需要时可检索恢复。这让 agent 的记忆像人一样：重要的牢记，次要的模糊但不丢失。
+`forget` 表尚未实现。设计目标是保留被移出的原始细节，需要时可检索恢复，而不是直接删除。
 
 ### 阶段五：演进（Evolution）
 
@@ -172,7 +172,7 @@ v2: FROM base-agent + 扩展     → 继承 v1，追加新技能
 v3: FROM v2 + 迁移             → 继承 v2，升级数据结构
 ```
 
-每次构建都有历史记录（history 表），可以追溯演进过程。memory 和 loop_runs 跨版本保留，agent 在升级后不会失去记忆。
+每次构建都有历史记录（history 表），可以追溯演进过程。设计目标是让 memory 和 loop_runs 跨版本保留，使 agent 在升级后不会失去记忆。
 
 ## 与 Agent 的合作模式
 
@@ -235,27 +235,27 @@ Logos 定义了 agent 和状态管理之间的边界：
               │           │      └────┬────┘
               │           │           │
          logos page       │     对话过程中的读写：
-         add-memory       │     ├─ query-dna（决策）
+         query-memory     │     ├─ query-dna（决策）
          update-context   │     ├─ book query（知识）
-         loop run ...      │     ├─ add-memory（记忆）
+         loop run ...      │     ├─ query-memory（回忆）
               │           │     ├─ update-context（更新）
               │           │     └─ loop run（任务执行）
               │           │
               └───────────┼───────────┘
                           │
                      记忆生命周期
-                     ├─ context 溢出 → memory 快照
-                     └─ sleep 循环 → memory 精简 + forget 归档
+                     ├─ 已实现：page 隔离的 memory 查询
+                     └─ 未实现：context 压缩、forget 归档
 ```
 
 ## 设计哲学
 
 1. **Agent 不应该重复思考同一件事。** 通过 memory 和 context，让 agent 站在昨天的肩膀上。
 2. **Agent 不应该在每轮对话中重新认识自己。** 通过 dna 和 context，人格是持久且一致的。
-3. **Agent 应该知道什么时候该做什么。** 通过 loop，习惯自动化执行。
+3. **Agent 应该知道自己可以做什么。** 通过 loop context 自主选择，并用 loop_runs 记录过程。
 4. **Agent 应该有可控的知识边界。** 通过 book，知识是注册的、可校验的、可溯源的。
 5. **Agent 的能力应该是可发现、可组合的。** 通过 skill，能力按需加载，不污染 context。
-6. **遗忘是健康的。** 通过 forget，记忆不过载，但不丢失。
+6. **遗忘是健康的。** 未来通过 forget，让记忆不过载，但不丢失。
 7. **摘要注入，按需加载。** Context 中只放概览，详情通过 CLI 按需获取。信息越多，这条越重要。
 8. **信任包的制作者。** .iroll 包中的 @sql 是裸 SQL，skill 中的脚本是全权限。包的制作者和运行者之间没有权限隔离 — 这是有意为之的简化。如果你不信任一个包，不要加载它。
 
@@ -263,8 +263,11 @@ Logos 定义了 agent 和状态管理之间的边界：
 
 当前版本的一些有意识取舍，留待后续迭代：
 
-- **Loop 调度靠 agent 自觉。** 没有独立的 engine 层来驱动 loop 执行。Agent 在 context 中看到可用种子，自行决定何时启动。下个版本会引入 engine 机制。
-- **Memory 暂无检索。** 当前只能 add，不能 query。这是下一个优先补齐的功能。
+- **Loop 永远由 agent 自主执行。** Logos 不调度、不规划、不执行，只提供种子、当前 focus 和生命记录。
+- **Memory 写入入口尚未接入 context 压缩。** 当前已有 page 隔离的查询与 DB 写入/整理 API，但没有自动压缩流程。
+- **Forget 尚未实现。** 记忆整理目前没有归档次要细节的持久化目标。
+- **Skill 注册与查询尚未实现。** `Resources/skills/` 是协议方向，不是当前运行时能力。
+- **Logos CLI 尚未接入 irollhub。** irollhub API 服务已经存在，但 `login/push/pull/search` 仍是未来命令。
 - **@sql 无权限隔离。** Context 中的 SQL 查询直接执行，不做安全沙箱。包的制作者拥有完全信任。
 
 详细技术规格见 [rebot-roll.md](rebot-roll.md)。

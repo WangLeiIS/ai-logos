@@ -93,7 +93,7 @@ DELETE /api/v1/auth/keys/{key_id}       吊销 API Key
 2. GitHub 回调 → irollhub 创建用户（首次）或匹配已有用户 → 签发 API Key
 3. 用户在页面拿到 API Key → 配置到 CLI
 
-**CLI 登录流程：**
+**未来的 Logos CLI 登录流程（尚未实现）：**
 
 ```bash
 logos roll login --hub https://irollhub.example.com
@@ -222,7 +222,7 @@ Key 格式：`{org}/{package}/{version}.iroll`
 
 ## CLI 集成
 
-扩展现有 `logos roll` 命令：
+以下是尚未实现的 Logos CLI 集成方案，计划扩展现有 `logos roll` 命令：
 
 ```bash
 # 登录 hub
