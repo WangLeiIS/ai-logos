@@ -262,6 +262,11 @@ func resolveValue(v interface{}, irollPath string, db *sql.DB) (interface{}, err
 }
 
 func resolveSQL(db *sql.DB, query string) interface{} {
+	// Only allow SELECT queries to prevent data modification via @sql references.
+	upper := strings.ToUpper(strings.TrimSpace(query))
+	if !strings.HasPrefix(upper, "SELECT") {
+		return "[sql error: only SELECT queries are allowed]"
+	}
 	rows, err := db.Query(query)
 	if err != nil {
 		return fmt.Sprintf("[sql error: %s]", err.Error())

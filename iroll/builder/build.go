@@ -145,8 +145,15 @@ func Build(lf *Layerfile, tagName string) (*BuildResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	if _, err := os.Stat(dest); err == nil {
-		return nil, fmt.Errorf("iroll '%s' already exists", tagName)
+	// Ensure storeRoot exists, then use os.Mkdir for atomic create-if-not-exists.
+	if err := os.MkdirAll(storeRoot, 0755); err != nil {
+		return nil, fmt.Errorf("ensure store root: %w", err)
+	}
+	if err := os.Mkdir(dest, 0755); err != nil {
+		if os.IsExist(err) {
+			return nil, fmt.Errorf("iroll '%s' already exists", tagName)
+		}
+		return nil, fmt.Errorf("create store directory: %w", err)
 	}
 	if err := copyDir(tmpDir, dest); err != nil {
 		return nil, fmt.Errorf("copy to store: %w", err)
