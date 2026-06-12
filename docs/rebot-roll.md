@@ -144,7 +144,7 @@ Logos 只管理上下文和记录，不执行任务。读取 page context 时会
 | 表 | 说明 |
 |----|------|
 | book | 已注册 Book Bundle 的元数据与资源路径 |
-| skill | 技能元数据（协议提案，尚未实现，见第 9 节） |
+| skill | 技能元数据（构建时从 Resources/skills/ 自动发现并注册） |
 
 Book Bundle 的内容存储在 `Resources/books/<book-id>/`，SQLite `book` 表仅保存用于列举、检查和定位资源的元数据。每个 Bundle 必须包含：
 
@@ -285,6 +285,13 @@ logos loop current|history|show ...
 
 `book query` 使用当前 cwd 的活跃 iroll。`--book` 与 `--tag` 可重复传入；标签会去除首尾空白、将英文转为小写并去重。
 
+### 5.7 技能
+
+| 命令 | 说明 |
+|------|------|
+| `logos skill list [name] [--cwd .]` | 列出 iroll 中已注册的技能（name、description、weight、abs_path） |
+| `logos skill show <skill-name> [name] [--cwd .]` | 查看单个技能详情（含 skill.md 绝对路径，agent 自行读取内容） |
+
 ## 6. 技术栈
 
 - Go 1.24, Cobra CLI 框架
@@ -312,7 +319,7 @@ logos loop current|history|show ...
 ### 待做
 
 - [ ] 遗忘表定义 + 实现
-- [ ] skill 表 + Resources/skills/ 技能管理（设计已完成，待实现）
+- [x] skill 表 + Resources/skills/ 技能管理（构建时发现、校验、注册，CLI 查询）
 - [ ] context 压缩写入 memory
 - [ ] Logos CLI 接入 irollhub
 - [ ] 前端界面
@@ -391,7 +398,7 @@ Skill 是 agent 可调用的能力单元。和 loop 的区别：loop 描述 agen
 
 ### 9.2 文件结构
 
-本节是尚未实现的 skill 注册协议提案。每个 skill 计划存储在 `Resources/skills/<skill-name>/` 目录下：
+每个 skill 存储在 `Resources/skills/<skill-name>/` 目录下：
 
 ```text
 Resources/skills/<skill-name>/
@@ -416,7 +423,7 @@ description: 触发描述，说明什么时候应该使用这个技能
 
 ### 9.3 skill 表结构
 
-计划在构建时扫描 `Resources/skills/`，校验每个 skill.md 并注册到 skill 表：
+构建时扫描 `Resources/skills/`，校验每个 skill.md 并注册到 skill 表：
 
 | 字段 | 类型 | 约束 | 说明 |
 |------|------|------|------|
@@ -431,15 +438,13 @@ description: 触发描述，说明什么时候应该使用这个技能
 
 ### 9.4 工作流程
 
-以下工作流均为协议提案，尚未实现：
-
 ```
 构建时：Resources/skills/ → 校验 skill.md → 注册 skill 表
 使用时：agent 读取 skill 列表 → 匹配当前情境 → 加载对应 skill.md → 执行
 ```
 
-1. **注册**：计划在构建 iroll 时自动扫描 `Resources/skills/`，校验每个目录下必须有 `skill.md` 且 frontmatter 包含 name 和 description，通过后写入 skill 表
-2. **发现**：agent 通过 CLI 查询 skill 列表，获取 name 和 description
+1. **注册**：构建 iroll 时自动扫描 `Resources/skills/`，校验每个目录下必须有 `skill.md` 且 frontmatter 包含 name 和 description，通过后写入 skill 表
+2. **发现**：agent 通过 `logos skill list` 查询 skill 列表，获取 name、description 和 abs_path
 3. **匹配**：agent 根据 description 判断当前情境需要哪个 skill
 4. **加载**：读取对应 skill.md 的完整内容，按指令执行
 5. **执行**：可调用 scripts/ 中的脚本，参考 references/ 中的文档

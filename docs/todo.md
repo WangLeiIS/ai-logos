@@ -4,7 +4,7 @@
 
 ## 第一阶段：冻结协议
 
-- [ ] 冻结 .iroll 格式 — 表结构、context 格式、Resources 目录规范确定后不再轻易变更
+- [x] 冻结 .iroll 格式 — 表结构、context 格式、Resources 目录规范确定后不再轻易变更
 - [x] 补齐 loop CLI — seed CRUD、run 生命周期、动态 context、页面删除清理均已完成
 - [x] memory 重构 — 表结构增加 name/question/page_id 列（参考 dna Q&A），去掉 add-memory CLI，为未来 context 压缩写入预留 DB API，补齐 query-memory CLI
 - [x] memory 页面隔离 — memory 按 `page_id` 写入和查询
