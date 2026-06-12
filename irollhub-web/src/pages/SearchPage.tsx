@@ -1,5 +1,5 @@
 import { useSearchParams } from 'react-router-dom';
-import { PackageList } from '../components/package/PackageList';
+import { PackageCard } from '../components/package/PackageCard';
 import { api } from '../api/client';
 import { useQuery } from '@tanstack/react-query';
 import type { SearchResponse } from '../types';
@@ -22,17 +22,15 @@ export function SearchPage() {
         Search results for "{query}"
       </h1>
       {isLoading ? (
-        <p className="text-secondary">Loading...</p>
+        <p className="text-secondary" aria-live="polite">Loading…</p>
       ) : error ? (
-        <p className="text-red-500">Error searching packages</p>
+        <p className="text-red-500" role="alert">Error searching packages</p>
       ) : results.length === 0 ? (
         <p className="text-secondary">No results found.</p>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {results.map(({ org, package: pkg }) => (
-            <div key={`${org.id}-${pkg.id}`}>
-              <PackageList org={org.name} packages={[pkg]} />
-            </div>
+            <PackageCard key={`${org.id}-${pkg.id}`} org={org.name} pkg={pkg} />
           ))}
         </div>
       )}

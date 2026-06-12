@@ -1,13 +1,13 @@
-import type { PackageDetail } from '../../types';
+import type { PackageDetail as PackageDetailType } from '../../types';
+import { parseTags } from '../../types';
 import { VersionList } from './VersionList';
 
 interface PackageDetailProps {
-  org: string;
-  pkg: PackageDetail;
+  pkg: PackageDetailType;
 }
 
 export function PackageDetail({ pkg }: PackageDetailProps) {
-  const tags = JSON.parse(pkg.tags || '[]');
+  const tags = parseTags(pkg.tags);
 
   return (
     <div className="space-y-8">

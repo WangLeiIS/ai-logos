@@ -14,8 +14,8 @@ export function OrgDetailPage() {
 
   if (!org) return <div>Organization not found</div>;
 
-  if (isLoading) return <div className="max-w-7xl mx-auto px-4 py-12"><p className="text-secondary">Loading...</p></div>;
-  if (error) return <div className="max-w-7xl mx-auto px-4 py-12"><p className="text-red-500">Error loading organization</p></div>;
+  if (isLoading) return <div className="max-w-7xl mx-auto px-4 py-12"><p className="text-secondary" aria-live="polite">Loading…</p></div>;
+  if (error) return <div className="max-w-7xl mx-auto px-4 py-12"><p className="text-red-500" role="alert">Error loading organization</p></div>;
   if (!data) return <div className="max-w-7xl mx-auto px-4 py-12"><p className="text-secondary">Organization not found</p></div>;
 
   return (

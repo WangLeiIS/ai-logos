@@ -43,3 +43,11 @@ export interface ApiError {
   error: string;
   code: string;
 }
+
+export function parseTags(tags: string): string[] {
+  try {
+    return JSON.parse(tags || '[]');
+  } catch {
+    return [];
+  }
+}

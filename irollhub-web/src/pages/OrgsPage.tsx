@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 
 export function OrgsPage() {
   const { data, isLoading, error } = useQuery({
-    queryKey: ['orgs'],
+    queryKey: ['orgs', { limit: 100, offset: 0 }],
     queryFn: () => api.listOrgs(100, 0),
   });
 
@@ -14,9 +14,9 @@ export function OrgsPage() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
       <h1 className="text-3xl font-bold text-primary mb-6">Organizations</h1>
       {isLoading ? (
-        <p className="text-secondary">Loading...</p>
+        <p className="text-secondary" aria-live="polite">Loading…</p>
       ) : error ? (
-        <p className="text-red-500">Error loading organizations</p>
+        <p className="text-red-500" role="alert">Error loading organizations</p>
       ) : (
         <OrgList orgs={orgs} />
       )}

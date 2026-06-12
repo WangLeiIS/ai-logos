@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import type { Package } from '../../types';
+import { parseTags } from '../../types';
 
 interface PackageCardProps {
   org: string;
@@ -7,7 +8,7 @@ interface PackageCardProps {
 }
 
 export function PackageCard({ org, pkg }: PackageCardProps) {
-  const tags = JSON.parse(pkg.tags || '[]');
+  const tags = parseTags(pkg.tags);
 
   return (
     <Link
