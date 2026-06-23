@@ -42,3 +42,6 @@ irollhub 是产品本身，CLI 只是运行时。
 4. 根据真实使用反馈再决定 forget、context 压缩和前端的优先级。
 
 暂不在 Logos 内实现 loop 自动调度。Agent 自主决定做什么，Logos 只管理上下文和生命记录。
+
+
+meeting？
