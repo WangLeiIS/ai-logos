@@ -8,7 +8,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN CGO_ENABLED=1 go build -o irollhub .
+RUN CGO_ENABLED=1 go build -tags sqlite_fts5 -o irollhub .
 
 FROM alpine:3.21
 

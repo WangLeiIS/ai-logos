@@ -97,6 +97,16 @@ logos roll inspect <name>             # 查看详情
 logos roll history <name>             # 构建历史
 ```
 
+### irollhub 集成
+
+```bash
+logos roll login --hub <url>          # 登录 irollhub，保存 API Key
+logos roll logout                     # 清除本地 API Key
+logos roll search <keyword>           # 搜索远端包
+logos roll push <file.iroll|name> <org>/<pkg>:<ver>  # 发布包版本
+logos roll pull <org>/<pkg>[:<ver>]   # 下载并加载包，默认版本 latest
+```
+
 ### 页面管理
 
 ```bash
@@ -191,7 +201,7 @@ ai-logos/
 
 当前使用说明以本 README 和 `docs/rebot-roll.md` 为准。`docs/superpowers/` 保存带日期的设计与实施记录，其中可能包含已经被后续设计替代的历史术语和计划状态。
 
-当前 Logos CLI 尚未接入 irollhub。`login/push/pull/search` 是下一阶段能力，不属于现有命令。
+Logos CLI 已接入 irollhub，支持 `login/logout/push/pull/search`。Hub 端使用 SQLite FTS5 做搜索，构建和测试 irollhub 时需要启用 `sqlite_fts5` Go build tag。
 
 ## 技术栈
 
@@ -207,6 +217,15 @@ go build -o ../logos .
 ```
 
 需要 CGO 环境（go-sqlite3 依赖）。Windows 上需安装 GCC（如 MinGW-w64 或 TDM-GCC）。
+
+### irollhub 构建与测试
+
+```bash
+cd irollhub
+go build -tags sqlite_fts5 .
+go test -tags sqlite_fts5 ./...
+go run -tags sqlite_fts5 . config.yaml
+```
 
 ## License
 

@@ -69,7 +69,7 @@ org/package:version
               └─────────┘   └───────────┘
 ```
 
-**irollhub** 是一个 Go HTTP 服务。元数据存 SQLite，.iroll 文件存 MinIO。无前端页面，纯 API 服务，通过 CLI 交互。
+**irollhub** 是一个 Go HTTP 服务。元数据存 SQLite，.iroll 文件存 MinIO，通过 API、Logos CLI 和 `irollhub-web` 前端交互。
 
 ## API
 
@@ -93,7 +93,7 @@ DELETE /api/v1/auth/keys/{key_id}       吊销 API Key
 2. GitHub 回调 → irollhub 创建用户（首次）或匹配已有用户 → 签发 API Key
 3. 用户在页面拿到 API Key → 配置到 CLI
 
-**未来的 Logos CLI 登录流程（尚未实现）：**
+**Logos CLI 登录流程：**
 
 ```bash
 logos roll login --hub https://irollhub.example.com
@@ -222,14 +222,15 @@ Key 格式：`{org}/{package}/{version}.iroll`
 
 ## CLI 集成
 
-以下是尚未实现的 Logos CLI 集成方案，计划扩展现有 `logos roll` 命令：
+Logos CLI 已经扩展 `logos roll` 命令，可直接与 irollhub 交互：
 
 ```bash
 # 登录 hub
 logos roll login --hub https://irollhub.example.com
 
-# 推送到 hub（自动读取当前 hub 地址和凭证）
-logos roll push official/cat-agent:v1.0.0
+# 推送到 hub（自动读取当前 hub 地址和凭证，可传已加载包名或 .iroll 文件）
+logos roll push cat-agent official/cat-agent:v1.0.0
+logos roll push ./cat-agent.iroll official/cat-agent:v1.0.0
 
 # 从 hub 拉取
 logos roll pull official/cat-agent:v1.0.0
@@ -255,6 +256,17 @@ minio:
   secret_key: "minioadmin"
   bucket: "irollhub"
   use_ssl: false
+```
+
+## 构建、测试与运行
+
+irollhub 的搜索表使用 SQLite FTS5，构建、测试和本地运行都需要启用 `sqlite_fts5` Go build tag。
+
+```bash
+cd irollhub
+go build -tags sqlite_fts5 .
+go test -tags sqlite_fts5 ./...
+go run -tags sqlite_fts5 . config.yaml
 ```
 
 ## 项目结构

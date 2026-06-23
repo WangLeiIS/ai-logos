@@ -34,7 +34,7 @@ go build -o ../logos .
 
 ```bash
 cd irollhub
-go run . config.yaml
+go run -tags sqlite_fts5 . config.yaml
 ```
 
 ### Running Tests
@@ -49,6 +49,10 @@ go test ./cmd/...
 
 # Run all tests
 go test ./...
+
+# Run irollhub tests
+cd ../irollhub
+go test -tags sqlite_fts5 ./...
 ```
 
 ## High-Level Architecture
@@ -101,6 +105,8 @@ Architecture: HTTP service with SQLite for metadata, MinIO for .iroll file stora
 - Organizations/Packages/Versions: CRUD operations
 - Search: Full-text search across packages
 
+Build and test irollhub with `-tags sqlite_fts5`; its search schema uses SQLite FTS5.
+
 ## Important Implementation Details
 
 ### Path Security
@@ -136,7 +142,7 @@ When reading context, `@file` and `@sql` references are resolved to actual value
 
 ### CGO Dependency
 
-The project requires CGO (go-sqlite3). On Windows, install GCC (MinGW-w64 or TDM-GCC).
+The project requires CGO (go-sqlite3). On Windows, install GCC (MinGW-w64 or TDM-GCC). irollhub also requires the `sqlite_fts5` Go build tag for its FTS5 search table.
 
 ## Two Independent Go Modules
 
