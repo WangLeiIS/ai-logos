@@ -112,7 +112,7 @@ func runBookQuery(ctx context.Context, cwd string, query book.Query) (*book.Quer
 	if err != nil {
 		return nil, err
 	}
-	rollRoot, err := store.IrollPath(name)
+	rollRoot, err := store.IrollPath(name, "latest")
 	if err != nil {
 		return nil, err
 	}
@@ -140,7 +140,7 @@ func resolveBookRoll(cwd string, names []string) (string, error) {
 		return "", fmt.Errorf("at most one iroll name may be specified")
 	}
 	if len(names) == 1 {
-		if _, err := store.IrollPath(names[0]); err != nil {
+		if _, err := store.IrollPath(names[0], "latest"); err != nil {
 			return "", err
 		}
 		return names[0], nil
@@ -154,7 +154,7 @@ func resolveBookRoll(cwd string, names []string) (string, error) {
 }
 
 func openBookDB(name string) (*sql.DB, error) {
-	path, err := store.DbPath(name)
+	path, err := store.DbPath(name, "latest")
 	if err != nil {
 		return nil, err
 	}

@@ -104,14 +104,15 @@ var pullCmd = &cobra.Command{
 			}
 
 			// 提取包
-			if err := store.Extract(tmpFile, name); err != nil {
+			if err := store.Extract(tmpFile, name, version); err != nil {
 				outputError(fmt.Sprintf("Failed to extract package: %v", err))
 			}
 
 			outputJSON(map[string]string{
 				"message": fmt.Sprintf("Pulled %s/%s:%s", org, pkg, version),
 				"name":    name,
-				"path":    checkedIrollPath(name),
+				"version": version,
+				"path":    checkedIrollPath(name, version),
 			})
 		}
 	},

@@ -42,7 +42,7 @@ var skillListCmd = &cobra.Command{
 			skills = []skill.Skill{}
 		}
 
-		rollRoot, err := store.IrollPath(name)
+		rollRoot, err := store.IrollPath(name, "latest")
 		if err != nil {
 			outputError(err.Error())
 		}
@@ -87,7 +87,7 @@ var skillShowCmd = &cobra.Command{
 			outputError(err.Error())
 		}
 
-		rollRoot, err := store.IrollPath(name)
+		rollRoot, err := store.IrollPath(name, "latest")
 		if err != nil {
 			outputError(err.Error())
 		}
@@ -120,7 +120,7 @@ func resolveSkillRoll(cwd string, names []string) (string, error) {
 		return "", fmt.Errorf("at most one iroll name may be specified")
 	}
 	if len(names) == 1 {
-		if _, err := store.IrollPath(names[0]); err != nil {
+		if _, err := store.IrollPath(names[0], "latest"); err != nil {
 			return "", err
 		}
 		return names[0], nil
@@ -134,7 +134,7 @@ func resolveSkillRoll(cwd string, names []string) (string, error) {
 }
 
 func openSkillDB(name string) (*sql.DB, error) {
-	path, err := store.DbPath(name)
+	path, err := store.DbPath(name, "latest")
 	if err != nil {
 		return nil, err
 	}

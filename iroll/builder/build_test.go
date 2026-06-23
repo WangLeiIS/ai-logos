@@ -58,7 +58,7 @@ func TestProcessCopyRejectsDestinationTraversal(t *testing.T) {
 func TestBuildRejectsUnsafeTagName(t *testing.T) {
 	lf := &Irollfile{Dir: t.TempDir()}
 
-	if _, err := Build(lf, "../escaped"); err == nil {
+	if _, err := Build(lf, "../escaped", "latest"); err == nil {
 		t.Fatal("Build returned nil error for unsafe tag name")
 	}
 }
@@ -100,11 +100,11 @@ func TestBuildRegistersValidBooks(t *testing.T) {
 		}},
 	}
 
-	result, err := Build(lf, "valid-roll")
+	result, err := Build(lf, "valid-roll", "latest")
 	if err != nil {
 		t.Fatalf("Build returned error: %v", err)
 	}
-	if result.Path != filepath.Join(home, ".iroll", "valid-roll") {
+	if result.Path != filepath.Join(home, ".iroll", "valid-roll", "latest") {
 		t.Fatalf("result path = %q", result.Path)
 	}
 	conn, err := sql.Open("sqlite3", filepath.Join(result.Path, "ai_roll.db"))
@@ -133,17 +133,17 @@ func TestBuildFailsForInvalidBookBundle(t *testing.T) {
 		}},
 	}
 
-	if _, err := Build(lf, "invalid-roll"); err == nil {
+	if _, err := Build(lf, "invalid-roll", "latest"); err == nil {
 		t.Fatal("Build returned nil error for invalid bundle")
 	}
-	if _, err := os.Stat(filepath.Join(home, ".iroll", "invalid-roll")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(home, ".iroll", "invalid-roll", "latest")); !os.IsNotExist(err) {
 		t.Fatalf("invalid build entered store: %v", err)
 	}
 }
 
 func TestBuildRemovesInheritedBookRegistrationWhenResourceIsRemoved(t *testing.T) {
 	home := isolatedBuildHome(t)
-	baseDir := filepath.Join(home, ".iroll", "base-roll")
+	baseDir := filepath.Join(home, ".iroll", "base-roll", "latest")
 	if err := os.MkdirAll(baseDir, 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -166,7 +166,7 @@ func TestBuildRemovesInheritedBookRegistrationWhenResourceIsRemoved(t *testing.T
 		Args: []string{"base-roll"},
 	}}}
 
-	result, err := Build(lf, "child-roll")
+	result, err := Build(lf, "child-roll", "latest")
 	if err != nil {
 		t.Fatalf("Build returned error: %v", err)
 	}
@@ -203,7 +203,7 @@ func TestBuildCheckpointsWALBeforeCopyingToStore(t *testing.T) {
 		},
 	}
 
-	result, err := Build(lf, "wal-roll")
+	result, err := Build(lf, "wal-roll", "latest")
 	if err != nil {
 		t.Fatalf("Build returned error: %v", err)
 	}
@@ -247,7 +247,7 @@ func TestBuildBaseAgentContainsLoopSchema(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := Build(layerfile, "loop-schema-test")
+	result, err := Build(layerfile, "loop-schema-test", "latest")
 	if err != nil {
 		t.Fatal(err)
 	}

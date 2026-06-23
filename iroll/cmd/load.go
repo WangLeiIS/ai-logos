@@ -18,13 +18,13 @@ var loadCmd = &cobra.Command{
 			outputError(err.Error())
 		}
 
-		if err := store.Extract(zipPath, name); err != nil {
+		if err := store.Extract(zipPath, name, "latest"); err != nil {
 			outputError(err.Error())
 		}
 
 		outputJSON(map[string]string{
 			"name": name,
-			"path": checkedIrollPath(name),
+			"path": checkedIrollPath(name, "latest"),
 		})
 	},
 }

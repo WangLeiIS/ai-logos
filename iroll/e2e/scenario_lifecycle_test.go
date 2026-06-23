@@ -163,7 +163,7 @@ func TestBuildFromInheritsBaseLayer(t *testing.T) {
 		t.Fatalf("ParseIrollfile child returned error: %v", err)
 	}
 
-	childResult, err := builder.Build(lf, "child-agent")
+	childResult, err := builder.Build(lf, "child-agent", "latest")
 	if err != nil {
 		t.Fatalf("Build child-agent returned error: %v", err)
 	}
@@ -230,7 +230,7 @@ func TestListShowsBuiltIroll(t *testing.T) {
 		t.Fatalf("List before build returned error: %v", err)
 	}
 	for _, n := range names {
-		if n == "my-agent" {
+		if n == "my-agent:latest" {
 			t.Fatal("List before build already contains 'my-agent'")
 		}
 	}
@@ -247,13 +247,13 @@ func TestListShowsBuiltIroll(t *testing.T) {
 	}
 	found := false
 	for _, n := range names {
-		if n == "my-agent" {
+		if n == "my-agent:latest" {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Fatalf("List after build = %v, want 'my-agent' included", names)
+		t.Fatalf("List after build = %v, want 'my-agent:latest' included", names)
 	}
 }
 
@@ -316,7 +316,7 @@ func TestSaveAndLoadRoundTrip(t *testing.T) {
 	}
 
 	// Extract under new name
-	if err := store.Extract(zipPath, "loaded"); err != nil {
+	if err := store.Extract(zipPath, "loaded", "latest"); err != nil {
 		t.Fatalf("Extract returned error: %v", err)
 	}
 

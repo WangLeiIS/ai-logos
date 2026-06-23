@@ -198,12 +198,12 @@ func TestHubPullDownloadsAndExtracts(t *testing.T) {
 	}
 
 	// Extract using store.Extract.
-	if err := store.Extract(tmpZip, "pulled-agent"); err != nil {
+	if err := store.Extract(tmpZip, "pulled-agent", "latest"); err != nil {
 		t.Fatalf("Extract: %v", err)
 	}
 
 	// Verify ai_roll.db exists in the extracted directory.
-	extractedDB := filepath.Join(tmpDir, ".iroll", "pulled-agent", "ai_roll.db")
+	extractedDB := filepath.Join(tmpDir, ".iroll", "pulled-agent", "latest", "ai_roll.db")
 	if _, err := os.Stat(extractedDB); err != nil {
 		t.Errorf("ai_roll.db not found at %s: %v", extractedDB, err)
 	}

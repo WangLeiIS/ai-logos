@@ -14,7 +14,7 @@ var rmCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		name := args[0]
-		path := checkedIrollPath(name)
+		path := checkedIrollPath(name, "latest")
 
 		if _, err := os.Stat(path); os.IsNotExist(err) {
 			outputError("iroll '" + name + "' not found")

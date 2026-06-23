@@ -28,7 +28,7 @@ var queryMemoryCmd = &cobra.Command{
 			outputError(err.Error())
 		}
 
-		conn, err := db.Open(checkedDbPath(irollName))
+		conn, err := db.Open(checkedDbPath(irollName, "latest"))
 		if err != nil {
 			outputError(err.Error())
 		}

@@ -28,20 +28,25 @@ func New(t *testing.T) *Env {
 }
 
 // Build runs builder.Build using examples/base-agent/Irollfile.
+// tagName supports "name:version" format; defaults to "latest" version.
 func (e *Env) Build(tagName string) (*builder.BuildResult, error) {
 	e.t.Helper()
+	name, version, err := builder.ParseTag(tagName)
+	if err != nil {
+		return nil, err
+	}
 	lfPath := filepath.Join("..", "..", "examples", "base-agent", "Irollfile")
 	lf, err := builder.ParseIrollfile(lfPath)
 	if err != nil {
 		return nil, err
 	}
-	return builder.Build(lf, tagName)
+	return builder.Build(lf, name, version)
 }
 
 // DB opens the ai_roll.db for the given iroll name.
 func (e *Env) DB(name string) (*sql.DB, error) {
 	e.t.Helper()
-	dbPath, err := store.DbPath(name)
+	dbPath, err := store.DbPath(name, "latest")
 	if err != nil {
 		return nil, err
 	}

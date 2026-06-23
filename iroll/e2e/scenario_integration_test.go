@@ -411,7 +411,7 @@ func TestLoopAutoInjectionInContext(t *testing.T) {
 	}
 
 	// ResolveContext should inject a "loop" field.
-	irollPath, err := store.IrollPath("ctx-inject-test")
+	irollPath, err := store.IrollPath("ctx-inject-test", "latest")
 	if err != nil {
 		t.Fatalf("IrollPath: %v", err)
 	}

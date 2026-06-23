@@ -17,15 +17,20 @@ func HomeDir() string {
 	return filepath.Join(home, ".iroll")
 }
 
-func IrollPath(name string) (string, error) {
+func IrollPath(name string, version string) (string, error) {
 	if err := safepath.ValidateName(name); err != nil {
 		return "", err
 	}
-	return safepath.Join(HomeDir(), name)
+	// Two-step join: name then version
+	root, err := safepath.Join(HomeDir(), name)
+	if err != nil {
+		return "", err
+	}
+	return safepath.Join(root, version)
 }
 
-func DbPath(name string) (string, error) {
-	root, err := IrollPath(name)
+func DbPath(name string, version string) (string, error) {
+	root, err := IrollPath(name, version)
 	if err != nil {
 		return "", err
 	}
@@ -84,14 +89,14 @@ func ReadName(zipPath string) (string, error) {
 	return "", fmt.Errorf("ai_roll.db not found in zip")
 }
 
-// Extract extracts a .iroll ZIP to ~/.iroll/<name>/
-func Extract(zipPath string, name string) error {
-	dest, err := IrollPath(name)
+// Extract extracts a .iroll ZIP to ~/.iroll/<name>/<version>/
+func Extract(zipPath string, name string, version string) error {
+	dest, err := IrollPath(name, version)
 	if err != nil {
 		return err
 	}
 	if _, err := os.Stat(dest); err == nil {
-		return fmt.Errorf("iroll '%s' already exists", name)
+		return fmt.Errorf("iroll '%s:%s' already exists", name, version)
 	}
 
 	r, err := zip.OpenReader(zipPath)
@@ -147,7 +152,7 @@ func Extract(zipPath string, name string) error {
 	return nil
 }
 
-// List returns all loaded iroll names
+// List returns all loaded iroll names with versions as "name:version".
 func List() ([]string, error) {
 	home := HomeDir()
 	entries, err := os.ReadDir(home)
@@ -160,10 +165,21 @@ func List() ([]string, error) {
 
 	var names []string
 	for _, e := range entries {
-		if e.IsDir() {
-			dbFile := filepath.Join(home, e.Name(), "ai_roll.db")
+		if !e.IsDir() {
+			continue
+		}
+		rootDir := filepath.Join(home, e.Name())
+		versions, err := os.ReadDir(rootDir)
+		if err != nil {
+			continue
+		}
+		for _, v := range versions {
+			if !v.IsDir() {
+				continue
+			}
+			dbFile := filepath.Join(rootDir, v.Name(), "ai_roll.db")
 			if _, err := os.Stat(dbFile); err == nil {
-				names = append(names, e.Name())
+				names = append(names, e.Name()+":"+v.Name())
 			}
 		}
 	}

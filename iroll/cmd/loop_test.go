@@ -470,7 +470,7 @@ func setupLoopCommandTest(t *testing.T) (string, *sql.DB) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	dbPath, err := store.DbPath("test-roll")
+	dbPath, err := store.DbPath("test-roll", "latest")
 	if err != nil {
 		t.Fatal(err)
 	}

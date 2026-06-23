@@ -18,10 +18,10 @@ func TestLoopEndToEndAcrossIndependentPages(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := builder.Build(layerfile, "loop-e2e"); err != nil {
+	if _, err := builder.Build(layerfile, "loop-e2e", "latest"); err != nil {
 		t.Fatal(err)
 	}
-	dbPath, err := store.DbPath("loop-e2e")
+	dbPath, err := store.DbPath("loop-e2e", "latest")
 	if err != nil {
 		t.Fatal(err)
 	}

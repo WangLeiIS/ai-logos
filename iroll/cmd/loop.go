@@ -47,7 +47,7 @@ func openActiveLoop(cwd string) (string, string, *sql.DB, error) {
 	if err != nil {
 		return "", "", nil, err
 	}
-	dbPath, err := store.DbPath(name)
+	dbPath, err := store.DbPath(name, "latest")
 	if err != nil {
 		return "", "", nil, err
 	}

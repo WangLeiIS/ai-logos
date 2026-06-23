@@ -17,7 +17,7 @@ var saveCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		name := args[0]
-		srcDir := checkedIrollPath(name)
+		srcDir := checkedIrollPath(name, "latest")
 
 		if _, err := os.Stat(srcDir); os.IsNotExist(err) {
 			outputError("iroll '" + name + "' not found")

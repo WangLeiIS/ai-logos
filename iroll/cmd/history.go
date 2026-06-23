@@ -12,7 +12,7 @@ var historyCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		name := args[0]
-		conn, err := db.Open(checkedDbPath(name))
+		conn, err := db.Open(checkedDbPath(name, "latest"))
 		if err != nil {
 			outputError(err.Error())
 		}

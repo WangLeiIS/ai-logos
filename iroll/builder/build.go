@@ -29,12 +29,13 @@ type LayerJSON struct {
 
 type BuildResult struct {
 	Name    string `json:"name"`
+	Version string `json:"version"`
 	Path    string `json:"path"`
 	LayerID string `json:"layer_id"`
 }
 
-func Build(lf *Irollfile, tagName string) (*BuildResult, error) {
-	if err := safepath.ValidateName(tagName); err != nil {
+func Build(lf *Irollfile, name string, version string) (*BuildResult, error) {
+	if err := safepath.ValidateName(name); err != nil {
 		return nil, err
 	}
 
@@ -110,7 +111,7 @@ func Build(lf *Irollfile, tagName string) (*BuildResult, error) {
 	lj := LayerJSON{
 		LayerID:       layerID,
 		Parent:        parentLayerID,
-		Description:   fmt.Sprintf("build from Irollfile for %s", tagName),
+		Description:   fmt.Sprintf("build from Irollfile for %s:%s", name, version),
 		CreatedAt:     now,
 		SchemaVersion: 1,
 	}
@@ -138,29 +139,42 @@ func Build(lf *Irollfile, tagName string) (*BuildResult, error) {
 		return nil, fmt.Errorf("persist build database: %w", err)
 	}
 
-	// Copy to ~/.iroll/<name>/
+	// Copy to ~/.iroll/<name>/<version>/
 	home, _ := os.UserHomeDir()
 	storeRoot := filepath.Join(home, ".iroll")
-	dest, err := safepath.Join(storeRoot, tagName)
+	nameRoot, err := safepath.Join(storeRoot, name)
 	if err != nil {
 		return nil, err
 	}
-	// Ensure storeRoot exists, then use os.Mkdir for atomic create-if-not-exists.
-	if err := os.MkdirAll(storeRoot, 0755); err != nil {
-		return nil, fmt.Errorf("ensure store root: %w", err)
+	dest, err := safepath.Join(nameRoot, version)
+	if err != nil {
+		return nil, err
+	}
+	// Ensure storeRoot and name dir exist, then atomic create-if-not-exists for version dir.
+	if err := os.MkdirAll(nameRoot, 0755); err != nil {
+		return nil, fmt.Errorf("ensure name dir: %w", err)
 	}
 	if err := os.Mkdir(dest, 0755); err != nil {
 		if os.IsExist(err) {
-			return nil, fmt.Errorf("iroll '%s' already exists", tagName)
+			return nil, fmt.Errorf("iroll '%s:%s' already exists", name, version)
 		}
-		return nil, fmt.Errorf("create store directory: %w", err)
+		return nil, fmt.Errorf("create version directory: %w", err)
 	}
 	if err := copyDir(tmpDir, dest); err != nil {
 		return nil, fmt.Errorf("copy to store: %w", err)
 	}
 
+	// Update latest symlink
+	latestLink := filepath.Join(nameRoot, "latest")
+	os.Remove(latestLink)
+	if err := os.Symlink(version, latestLink); err != nil {
+		// Symlink may fail without privileges; write a .latest file as fallback
+		os.WriteFile(filepath.Join(nameRoot, ".latest"), []byte(version), 0644)
+	}
+
 	return &BuildResult{
-		Name:    tagName,
+		Name:    name,
+		Version: version,
 		Path:    dest,
 		LayerID: layerID,
 	}, nil
@@ -189,17 +203,22 @@ func checkpointAndCloseSQLite(conn *sql.DB) error {
 	return closeErr
 }
 
-func processFrom(tmpDir string, baseName string) (string, error) {
-	if err := safepath.ValidateName(baseName); err != nil {
-		return "", err
+func processFrom(tmpDir string, baseTag string) (string, error) {
+	baseName, baseVersion, err := ParseTag(baseTag)
+	if err != nil {
+		return "", fmt.Errorf("invalid FROM tag: %w", err)
 	}
 	home, _ := os.UserHomeDir()
-	src, err := safepath.Join(filepath.Join(home, ".iroll"), baseName)
+	nameRoot, err := safepath.Join(filepath.Join(home, ".iroll"), baseName)
+	if err != nil {
+		return "", err
+	}
+	src, err := safepath.Join(nameRoot, baseVersion)
 	if err != nil {
 		return "", err
 	}
 	if _, err := os.Stat(src); os.IsNotExist(err) {
-		return "", fmt.Errorf("base iroll '%s' not found in ~/.iroll/", baseName)
+		return "", fmt.Errorf("base iroll '%s:%s' not found in ~/.iroll/", baseName, baseVersion)
 	}
 
 	if err := copyDir(src, tmpDir); err != nil {

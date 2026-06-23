@@ -10,7 +10,7 @@ import (
 func TestIrollPathRejectsUnsafeName(t *testing.T) {
 	setTestHome(t)
 
-	if _, err := IrollPath("../outside"); err == nil {
+	if _, err := IrollPath("../outside", "latest"); err == nil {
 		t.Fatal("IrollPath returned nil error for unsafe name")
 	}
 }
@@ -24,7 +24,7 @@ func TestExtractRejectsZipSlip(t *testing.T) {
 		"../escaped.txt": "escaped",
 	})
 
-	err := Extract(archivePath, "safe-agent")
+	err := Extract(archivePath, "safe-agent", "latest")
 	if err == nil {
 		t.Fatal("Extract returned nil error for ZIP traversal")
 	}
@@ -41,7 +41,7 @@ func TestExtractRejectsUnsafeName(t *testing.T) {
 	archivePath := filepath.Join(t.TempDir(), "valid.iroll")
 	writeZip(t, archivePath, map[string]string{"ai_roll.db": "database"})
 
-	if err := Extract(archivePath, "../escaped"); err == nil {
+	if err := Extract(archivePath, "../escaped", "latest"); err == nil {
 		t.Fatal("Extract returned nil error for unsafe iroll name")
 	}
 }
@@ -55,11 +55,11 @@ func TestExtractValidArchive(t *testing.T) {
 		"Resources/greeting.txt": "hello",
 	})
 
-	if err := Extract(archivePath, "safe-agent"); err != nil {
+	if err := Extract(archivePath, "safe-agent", "latest"); err != nil {
 		t.Fatalf("Extract returned error: %v", err)
 	}
 
-	got, err := os.ReadFile(filepath.Join(home, ".iroll", "safe-agent", "Resources", "greeting.txt"))
+	got, err := os.ReadFile(filepath.Join(home, ".iroll", "safe-agent", "latest", "Resources", "greeting.txt"))
 	if err != nil {
 		t.Fatalf("read extracted file: %v", err)
 	}

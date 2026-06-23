@@ -39,16 +39,16 @@ func outputError(msg string) {
 	os.Exit(1)
 }
 
-func checkedIrollPath(name string) string {
-	path, err := store.IrollPath(name)
+func checkedIrollPath(name string, version string) string {
+	path, err := store.IrollPath(name, "latest")
 	if err != nil {
 		outputError(err.Error())
 	}
 	return path
 }
 
-func checkedDbPath(name string) string {
-	path, err := store.DbPath(name)
+func checkedDbPath(name string, version string) string {
+	path, err := store.DbPath(name, "latest")
 	if err != nil {
 		outputError(err.Error())
 	}

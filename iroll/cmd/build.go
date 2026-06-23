@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"logos/builder"
 
 	"github.com/spf13/cobra"
@@ -18,7 +19,12 @@ var buildCmd = &cobra.Command{
 			outputError(err.Error())
 		}
 
-		result, err := builder.Build(lf, buildTag)
+		name, version, err := builder.ParseTag(buildTag)
+		if err != nil {
+			outputError(fmt.Sprintf("invalid tag: %v", err))
+		}
+
+		result, err := builder.Build(lf, name, version)
 		if err != nil {
 			outputError(err.Error())
 		}
@@ -29,7 +35,7 @@ var buildCmd = &cobra.Command{
 
 func init() {
 	buildCmd.Flags().StringVarP(&buildFile, "file", "f", "Irollfile", "Irollfile path")
-	buildCmd.Flags().StringVarP(&buildTag, "tag", "t", "", "Output iroll name")
+	buildCmd.Flags().StringVarP(&buildTag, "tag", "t", "", "Output name[:version] (default version: latest)")
 	buildCmd.MarkFlagRequired("tag")
 
 	rollCmd.AddCommand(buildCmd)

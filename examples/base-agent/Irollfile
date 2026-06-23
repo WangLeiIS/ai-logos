@@ -1,0 +1,4 @@
+MIGRATE init_schema.sql
+MIGRATE init_data.sql
+COPY greeting.txt Resources/greeting.txt
+COPY books Resources/books

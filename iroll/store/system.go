@@ -160,7 +160,7 @@ func DeletePage(pageID string) error {
 		return err
 	}
 
-	dbPath, err := DbPath(irollName)
+	dbPath, err := DbPath(irollName, "latest")
 	if err != nil {
 		return err
 	}

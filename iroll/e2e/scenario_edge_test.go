@@ -54,13 +54,13 @@ func TestBuildWithInvalidSQLFails(t *testing.T) {
 		t.Fatalf("ParseIrollfile returned error: %v", err)
 	}
 
-	_, err = builder.Build(lf, "bad-sql-test")
+	_, err = builder.Build(lf, "bad-sql-test", "latest")
 	if err == nil {
 		t.Fatal("Build with nonexistent SQL file should have failed, but succeeded")
 	}
 
 	// Verify no residue in store: IrollPath should fail or stat should fail.
-	_, pathErr := store.IrollPath("bad-sql-test")
+	_, pathErr := store.IrollPath("bad-sql-test", "latest")
 	if pathErr == nil {
 		// If IrollPath didn't error, the directory should not exist on disk.
 		if _, statErr := os.Stat(filepath.Join(env.Store, "bad-sql-test")); statErr == nil {
@@ -94,13 +94,13 @@ func TestBuildWithInvalidBookFails(t *testing.T) {
 		t.Fatalf("ParseIrollfile returned error: %v", err)
 	}
 
-	_, err = builder.Build(lf, "bad-book-test")
+	_, err = builder.Build(lf, "bad-book-test", "latest")
 	if err == nil {
 		t.Fatal("Build with invalid book (missing manifest) should have failed, but succeeded")
 	}
 
 	// Verify no residue in store.
-	_, pathErr := store.IrollPath("bad-book-test")
+	_, pathErr := store.IrollPath("bad-book-test", "latest")
 	if pathErr == nil {
 		if _, statErr := os.Stat(filepath.Join(env.Store, "bad-book-test")); statErr == nil {
 			t.Fatal("store directory for 'bad-book-test' should not exist after failed build")
@@ -137,13 +137,13 @@ func TestBuildWithInvalidSkillFails(t *testing.T) {
 		t.Fatalf("ParseIrollfile returned error: %v", err)
 	}
 
-	_, err = builder.Build(lf, "bad-skill-test")
+	_, err = builder.Build(lf, "bad-skill-test", "latest")
 	if err == nil {
 		t.Fatal("Build with invalid skill (missing description) should have failed, but succeeded")
 	}
 
 	// Verify no residue in store.
-	_, pathErr := store.IrollPath("bad-skill-test")
+	_, pathErr := store.IrollPath("bad-skill-test", "latest")
 	if pathErr == nil {
 		if _, statErr := os.Stat(filepath.Join(env.Store, "bad-skill-test")); statErr == nil {
 			t.Fatal("store directory for 'bad-skill-test' should not exist after failed build")

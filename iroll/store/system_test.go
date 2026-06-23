@@ -138,7 +138,7 @@ func TestDeletePageRetryFinishesIndexCleanupAfterSystemFailure(t *testing.T) {
 func setupDeletePageStoreTest(t *testing.T) (*sql.DB, string, int64, int64) {
 	t.Helper()
 	setTestHome(t)
-	dbPath, err := DbPath("test-roll")
+	dbPath, err := DbPath("test-roll", "latest")
 	if err != nil {
 		t.Fatal(err)
 	}

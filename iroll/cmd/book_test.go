@@ -98,7 +98,7 @@ func setupBookCommandTest(t *testing.T) (string, string) {
 
 	cwd := filepath.Join(t.TempDir(), "workspace")
 	rollName := "test-roll"
-	rollRoot, err := store.IrollPath(rollName)
+	rollRoot, err := store.IrollPath(rollName, "latest")
 	if err != nil {
 		t.Fatal(err)
 	}

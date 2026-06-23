@@ -67,7 +67,7 @@ var pushCmd = &cobra.Command{
 			}
 		} else {
 			// 已加载的包名，需要重新打包
-			irollPath, err := store.IrollPath(source)
+			irollPath, err := store.IrollPath(source, "latest")
 			if err != nil {
 				outputError(fmt.Sprintf("Invalid package name: %v", err))
 			}
