@@ -10,6 +10,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// Version is set at build time via ldflags.
+// Default "dev" means unversioned development build.
+var Version = "dev"
+
 var rootCmd = &cobra.Command{
 	Use:   "logos",
 	Short: "logos - AI agent memory manager",
