@@ -14,7 +14,7 @@ func TestLoopEndToEndAcrossIndependentPages(t *testing.T) {
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 
-	layerfile, err := builder.ParseLayerfile(filepath.Join("..", "..", "examples", "base-agent", "Layerfile"))
+	layerfile, err := builder.ParseIrollfile(filepath.Join("..", "..", "examples", "base-agent", "Irollfile"))
 	if err != nil {
 		t.Fatal(err)
 	}

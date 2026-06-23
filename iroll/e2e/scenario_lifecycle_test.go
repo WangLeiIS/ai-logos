@@ -149,18 +149,18 @@ func TestBuildFromInheritsBaseLayer(t *testing.T) {
 		t.Fatalf("Build base-agent returned error: %v", err)
 	}
 
-	// Create child Layerfile with FROM base-agent and a MIGRATE
+	// Create child Irollfile with FROM base-agent and a MIGRATE
 	childDir := t.TempDir()
 	schemaFile := writeSchemaSQL(t, childDir)
 	childLF := "FROM base-agent\nMIGRATE " + schemaFile + "\n"
-	childLFPath := filepath.Join(childDir, "Layerfile")
+	childLFPath := filepath.Join(childDir, "Irollfile")
 	if err := os.WriteFile(childLFPath, []byte(childLF), 0644); err != nil {
 		t.Fatal(err)
 	}
 
-	lf, err := builder.ParseLayerfile(childLFPath)
+	lf, err := builder.ParseIrollfile(childLFPath)
 	if err != nil {
-		t.Fatalf("ParseLayerfile child returned error: %v", err)
+		t.Fatalf("ParseIrollfile child returned error: %v", err)
 	}
 
 	childResult, err := builder.Build(lf, "child-agent")

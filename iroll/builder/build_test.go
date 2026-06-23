@@ -56,7 +56,7 @@ func TestProcessCopyRejectsDestinationTraversal(t *testing.T) {
 }
 
 func TestBuildRejectsUnsafeTagName(t *testing.T) {
-	lf := &Layerfile{Dir: t.TempDir()}
+	lf := &Irollfile{Dir: t.TempDir()}
 
 	if _, err := Build(lf, "../escaped"); err == nil {
 		t.Fatal("Build returned nil error for unsafe tag name")
@@ -92,7 +92,7 @@ func TestBuildRegistersValidBooks(t *testing.T) {
 	home := isolatedBuildHome(t)
 	layerDir := t.TempDir()
 	writeBuilderBook(t, filepath.Join(layerDir, "books"), "valid-book", true)
-	lf := &Layerfile{
+	lf := &Irollfile{
 		Dir: layerDir,
 		Instructions: []Instruction{{
 			Type: InstCopy,
@@ -125,7 +125,7 @@ func TestBuildFailsForInvalidBookBundle(t *testing.T) {
 	home := isolatedBuildHome(t)
 	layerDir := t.TempDir()
 	writeBuilderBook(t, filepath.Join(layerDir, "books"), "invalid-book", false)
-	lf := &Layerfile{
+	lf := &Irollfile{
 		Dir: layerDir,
 		Instructions: []Instruction{{
 			Type: InstCopy,
@@ -161,7 +161,7 @@ func TestBuildRemovesInheritedBookRegistrationWhenResourceIsRemoved(t *testing.T
 		t.Fatal(err)
 	}
 	conn.Close()
-	lf := &Layerfile{Dir: t.TempDir(), Instructions: []Instruction{{
+	lf := &Irollfile{Dir: t.TempDir(), Instructions: []Instruction{{
 		Type: InstFrom,
 		Args: []string{"base-roll"},
 	}}}
@@ -195,7 +195,7 @@ func TestBuildCheckpointsWALBeforeCopyingToStore(t *testing.T) {
 	`), 0644); err != nil {
 		t.Fatal(err)
 	}
-	lf := &Layerfile{
+	lf := &Irollfile{
 		Dir: layerDir,
 		Instructions: []Instruction{
 			{Type: InstMigrate, Args: []string{"wal.sql"}},
@@ -243,7 +243,7 @@ func TestBuildBaseAgentContainsLoopSchema(t *testing.T) {
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 
-	layerfile, err := ParseLayerfile(filepath.Join("..", "..", "examples", "base-agent", "Layerfile"))
+	layerfile, err := ParseIrollfile(filepath.Join("..", "..", "examples", "base-agent", "Irollfile"))
 	if err != nil {
 		t.Fatal(err)
 	}

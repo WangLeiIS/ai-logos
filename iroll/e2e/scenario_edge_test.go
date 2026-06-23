@@ -37,21 +37,21 @@ CREATE TABLE IF NOT EXISTS pages (
 	}
 }
 
-// TestBuildWithInvalidSQLFails creates a Layerfile that MIGRATEs a nonexistent
+// TestBuildWithInvalidSQLFails creates a Irollfile that MIGRATEs a nonexistent
 // SQL file. Build should fail and no residue should be left in the store.
 func TestBuildWithInvalidSQLFails(t *testing.T) {
 	env := testenv.New(t)
 
 	dir := t.TempDir()
 	lfContent := "MIGRATE nonexistent.sql\n"
-	lfPath := filepath.Join(dir, "Layerfile")
+	lfPath := filepath.Join(dir, "Irollfile")
 	if err := os.WriteFile(lfPath, []byte(lfContent), 0644); err != nil {
 		t.Fatal(err)
 	}
 
-	lf, err := builder.ParseLayerfile(lfPath)
+	lf, err := builder.ParseIrollfile(lfPath)
 	if err != nil {
-		t.Fatalf("ParseLayerfile returned error: %v", err)
+		t.Fatalf("ParseIrollfile returned error: %v", err)
 	}
 
 	_, err = builder.Build(lf, "bad-sql-test")
@@ -69,7 +69,7 @@ func TestBuildWithInvalidSQLFails(t *testing.T) {
 	}
 }
 
-// TestBuildWithInvalidBookFails creates a Layerfile that COPYs a book directory
+// TestBuildWithInvalidBookFails creates a Irollfile that COPYs a book directory
 // missing manifest.json. Build should fail and no residue should be left.
 func TestBuildWithInvalidBookFails(t *testing.T) {
 	env := testenv.New(t)
@@ -84,14 +84,14 @@ func TestBuildWithInvalidBookFails(t *testing.T) {
 	}
 
 	lfContent := "MIGRATE schema.sql\nCOPY Resources Resources\n"
-	lfPath := filepath.Join(dir, "Layerfile")
+	lfPath := filepath.Join(dir, "Irollfile")
 	if err := os.WriteFile(lfPath, []byte(lfContent), 0644); err != nil {
 		t.Fatal(err)
 	}
 
-	lf, err := builder.ParseLayerfile(lfPath)
+	lf, err := builder.ParseIrollfile(lfPath)
 	if err != nil {
-		t.Fatalf("ParseLayerfile returned error: %v", err)
+		t.Fatalf("ParseIrollfile returned error: %v", err)
 	}
 
 	_, err = builder.Build(lf, "bad-book-test")
@@ -127,14 +127,14 @@ func TestBuildWithInvalidSkillFails(t *testing.T) {
 	}
 
 	lfContent := "MIGRATE schema.sql\nCOPY Resources Resources\n"
-	lfPath := filepath.Join(dir, "Layerfile")
+	lfPath := filepath.Join(dir, "Irollfile")
 	if err := os.WriteFile(lfPath, []byte(lfContent), 0644); err != nil {
 		t.Fatal(err)
 	}
 
-	lf, err := builder.ParseLayerfile(lfPath)
+	lf, err := builder.ParseIrollfile(lfPath)
 	if err != nil {
-		t.Fatalf("ParseLayerfile returned error: %v", err)
+		t.Fatalf("ParseIrollfile returned error: %v", err)
 	}
 
 	_, err = builder.Build(lf, "bad-skill-test")

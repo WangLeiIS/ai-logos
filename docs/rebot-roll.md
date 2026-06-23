@@ -223,7 +223,7 @@ Resources/books/<book-id>/
 
 | 命令 | 说明 |
 |------|------|
-| `logos roll build -f <file> -t <name>` | 从 Layerfile 分层构建 iroll |
+| `logos roll build -f <file> -t <name>` | 从 Irollfile 分层构建 iroll |
 | `logos roll load <file>` | 加载 .iroll 文件到 ~/.iroll/ |
 | `logos roll list` | 列出所有已加载的 iroll |
 | `logos roll rm <name>` | 删除一个 iroll 包（同时清理 system.db 中的相关记录） |
@@ -249,7 +249,7 @@ Resources/books/<book-id>/
 
 ### 5.4 分层构建
 
-**Layerfile 指令（仅三条）：**
+**Irollfile 指令（仅三条）：**
 
 | 指令 | 格式 | 说明 |
 |------|------|------|
@@ -257,7 +257,7 @@ Resources/books/<book-id>/
 | MIGRATE | `MIGRATE <file.sql>` | 执行 SQL（建表、改字段、插数据） |
 | COPY | `COPY <src> <dest>` | 复制文件到 Resources/ |
 
-构建完成所有 Layerfile 指令后，会自动发现、校验并注册 `Resources/books/` 下的 Book Bundle。任何无效 Bundle 都会使构建失败。
+构建完成所有 Irollfile 指令后，会自动发现、校验并注册 `Resources/books/` 下的 Book Bundle。任何无效 Bundle 都会使构建失败。
 
 ### 5.5 Loop
 

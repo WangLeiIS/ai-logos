@@ -15,8 +15,8 @@ cd ..
 # 查看状态
 ./logos status
 
-# 从 Layerfile 构建一个 agent
-./logos roll build -f examples/base-agent/Layerfile -t my-agent
+# 使用 Irollfile 构建 agent（默认当前目录 ./Irollfile）
+./logos roll build -t my-agent
 
 # 创建页面，开始对话
 ./logos page new my-agent --cwd .
@@ -88,7 +88,7 @@ logos status                          # 查看状态
 ### 包管理
 
 ```bash
-logos roll build -f <file> -t <name>  # 从 Layerfile 构建
+logos roll build -f <file> -t <name>  # 从 Irollfile 构建
 logos roll load <file>                # 加载 .iroll 文件
 logos roll list                       # 列出所有 iroll
 logos roll rm <name>                  # 删除 iroll
@@ -144,7 +144,7 @@ logos loop current|history|show ...
 
 ### 分层构建
 
-Layerfile 支持三条指令：
+Irollfile 支持三条指令：
 
 ```dockerfile
 FROM base-agent          # 继承基础层
@@ -182,7 +182,7 @@ ai-logos/
 ├── logos                     # 编译产物
 ├── iroll/                    # Go 源码
 │   ├── book/                 # Book Bundle 校验与检索
-│   ├── builder/              # Layerfile 分层构建
+│   ├── builder/              # Irollfile 分层构建
 │   ├── cmd/                  # Cobra 命令实现
 │   ├── db/                   # SQLite 数据操作
 │   ├── safepath/             # 路径安全校验

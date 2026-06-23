@@ -32,7 +32,7 @@ agent.iroll (ZIP)
 {
   "layer_id": "sha256:<64-char hex>",
   "parent": "sha256:<64-char hex> or empty",
-  "description": "build from Layerfile for <name>",
+  "description": "build from Irollfile for <name>",
   "created_at": "2026-06-11T10:00:00Z",
   "schema_version": 1
 }
@@ -328,7 +328,7 @@ CREATE TABLE skill (
 | from_layer | TEXT | | 基础层的 layer_id |
 | description | TEXT | NOT NULL | 构建描述 |
 | layer_id | TEXT | NOT NULL | 当前层 layer_id |
-| instructions | TEXT | | Layerfile 指令摘要（JSON） |
+| instructions | TEXT | | Irollfile 指令摘要（JSON） |
 | created_at | TEXT | NOT NULL | |
 
 ---
@@ -442,7 +442,7 @@ description: 触发描述
 
 ---
 
-## 5. Layerfile 构建指令
+## 5. Irollfile 构建指令
 
 仅三条指令：
 
@@ -454,7 +454,7 @@ description: 触发描述
 
 **构建流程**:
 
-1. 处理 Layerfile 指令（FROM → COPY → MIGRATE，逐条执行，遇错停止）
+1. 处理 Irollfile 指令（FROM → COPY → MIGRATE，逐条执行，遇错停止）
 2. 发现并校验 `Resources/books/` → 注册到 book 表
 3. 发现并校验 `Resources/skills/` → 注册到 skill 表
 4. 计算 layer_id（内容哈希）

@@ -11,9 +11,9 @@ var buildTag string
 
 var buildCmd = &cobra.Command{
 	Use:   "build",
-	Short: "Build an iroll from a Layerfile",
+	Short: "Build an iroll from an Irollfile",
 	Run: func(cmd *cobra.Command, args []string) {
-		lf, err := builder.ParseLayerfile(buildFile)
+		lf, err := builder.ParseIrollfile(buildFile)
 		if err != nil {
 			outputError(err.Error())
 		}
@@ -28,7 +28,7 @@ var buildCmd = &cobra.Command{
 }
 
 func init() {
-	buildCmd.Flags().StringVarP(&buildFile, "file", "f", "Layerfile", "Layerfile path")
+	buildCmd.Flags().StringVarP(&buildFile, "file", "f", "Irollfile", "Irollfile path")
 	buildCmd.Flags().StringVarP(&buildTag, "tag", "t", "", "Output iroll name")
 	buildCmd.MarkFlagRequired("tag")
 

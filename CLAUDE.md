@@ -24,8 +24,10 @@ cp ../logos ~/.local/bin/logos
 logos version
 logos status
 
-# Build an agent from Layerfile
-./logos roll build -f examples/base-agent/Layerfile -t my-agent
+# Build an agent (defaults to ./Irollfile)
+./logos roll build -t my-agent
+# Or specify explicitly:
+./logos roll build -f examples/base-agent/Irollfile -t my-agent
 
 # Create a page and start a conversation
 ./logos page new my-agent --cwd .
@@ -67,7 +69,7 @@ The project consists of two independent Go modules:
 
 **Package Structure:**
 
-- `builder/` - Layerfile layered build system (FROM/MIGRATE/COPY instructions)
+- `builder/` - Irollfile layered build system (FROM/MIGRATE/COPY instructions)
 - `book/` - Book Bundle validation and retrieval (Parquet-based knowledge chunks)
 - `cmd/` - Cobra CLI command implementations
 - `db/` - SQLite database operations (pages, memory, dna, loop, loop_runs)

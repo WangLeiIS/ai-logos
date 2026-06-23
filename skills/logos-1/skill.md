@@ -39,8 +39,8 @@ logos roll list
 If empty, build or load one:
 
 ```bash
-# Build from a Layerfile
-logos roll build -f Layerfile -t my-agent
+# Build from an Irollfile (defaults to ./Irollfile)
+logos roll build -t my-agent
 
 # Or load an existing .iroll file
 logos roll load ./my-agent.iroll
@@ -139,7 +139,7 @@ Each page has an independent active main run. Child runs use `--parent <main-run
 |---------|---------|
 | `logos status` | System status (iroll count, page count) |
 | `logos roll list` | List all iroll packages |
-| `logos roll build -f <file> -t <name>` | Build iroll from Layerfile |
+| `logos roll build -f <file> -t <name>` | Build iroll from Irollfile |
 | `logos roll load <file>` | Load .iroll file into ~/.iroll/ |
 | `logos roll rm <name>` | Remove an iroll package |
 | `logos roll save <name> [-o path]` | Export iroll to .iroll file |

@@ -21,22 +21,22 @@ type Instruction struct {
 	Args []string
 }
 
-type Layerfile struct {
+type Irollfile struct {
 	Instructions []Instruction
 	Dir          string
 }
 
-func ParseLayerfile(path string) (*Layerfile, error) {
+func ParseIrollfile(path string) (*Irollfile, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return nil, fmt.Errorf("open layerfile: %w", err)
+		return nil, fmt.Errorf("open irollfile: %w", err)
 	}
 	defer f.Close()
 
 	absPath, _ := filepath.Abs(path)
 	dir := filepath.Dir(absPath)
 
-	lf := &Layerfile{Dir: dir}
+	lf := &Irollfile{Dir: dir}
 	scanner := bufio.NewScanner(f)
 	lineNum := 0
 
@@ -78,7 +78,7 @@ func ParseLayerfile(path string) (*Layerfile, error) {
 	}
 
 	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("read layerfile: %w", err)
+		return nil, fmt.Errorf("read irollfile: %w", err)
 	}
 
 	return lf, nil

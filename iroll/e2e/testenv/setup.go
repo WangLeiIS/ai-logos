@@ -27,11 +27,11 @@ func New(t *testing.T) *Env {
 	return &Env{Home: home, Store: storeDir, t: t}
 }
 
-// Build runs builder.Build using examples/base-agent/Layerfile.
+// Build runs builder.Build using examples/base-agent/Irollfile.
 func (e *Env) Build(tagName string) (*builder.BuildResult, error) {
 	e.t.Helper()
-	lfPath := filepath.Join("..", "..", "examples", "base-agent", "Layerfile")
-	lf, err := builder.ParseLayerfile(lfPath)
+	lfPath := filepath.Join("..", "..", "examples", "base-agent", "Irollfile")
+	lf, err := builder.ParseIrollfile(lfPath)
 	if err != nil {
 		return nil, err
 	}
@@ -70,9 +70,9 @@ func (e *Env) CreatePage(name, pageID, cwd string) (*db.Page, error) {
 	return page, nil
 }
 
-// LayerfilePath returns the path to examples/base-agent/Layerfile.
-func (e *Env) LayerfilePath() string {
-	return filepath.Join("..", "..", "examples", "base-agent", "Layerfile")
+// IrollfilePath returns the path to examples/base-agent/Irollfile.
+func (e *Env) IrollfilePath() string {
+	return filepath.Join("..", "..", "examples", "base-agent", "Irollfile")
 }
 
 // SchemaPath returns the path to examples/base-agent/init_schema.sql.

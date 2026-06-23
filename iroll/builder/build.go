@@ -33,7 +33,7 @@ type BuildResult struct {
 	LayerID string `json:"layer_id"`
 }
 
-func Build(lf *Layerfile, tagName string) (*BuildResult, error) {
+func Build(lf *Irollfile, tagName string) (*BuildResult, error) {
 	if err := safepath.ValidateName(tagName); err != nil {
 		return nil, err
 	}
@@ -110,7 +110,7 @@ func Build(lf *Layerfile, tagName string) (*BuildResult, error) {
 	lj := LayerJSON{
 		LayerID:       layerID,
 		Parent:        parentLayerID,
-		Description:   fmt.Sprintf("build from Layerfile for %s", tagName),
+		Description:   fmt.Sprintf("build from Irollfile for %s", tagName),
 		CreatedAt:     now,
 		SchemaVersion: 1,
 	}
