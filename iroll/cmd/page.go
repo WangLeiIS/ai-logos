@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"logos/builder"
@@ -101,15 +102,18 @@ var pageListCmd = &cobra.Command{
 }
 
 var pageNewCmd = &cobra.Command{
-	Use:   "new <iroll-name>",
+	Use:   "new <iroll-name> [cwd]",
 	Short: "Create a new page",
-	Args:  cobra.ExactArgs(1),
+	Args:  cobra.RangeArgs(1, 2),
 	Run: func(cmd *cobra.Command, args []string) {
 		name, version, err := builder.ParseTag(args[0])
 		if err != nil {
 			outputError(fmt.Sprintf("invalid tag: %v", err))
 		}
-		cwd, _ := filepath.Abs(pageNewCwd)
+		cwd, err := resolvePageNewCwd(name, version, args)
+		if err != nil {
+			outputError(err.Error())
+		}
 		conn, err := db.Open(checkedDbPath(name, version))
 		if err != nil {
 			outputError(err.Error())
@@ -174,10 +178,35 @@ var pageDeleteCmd = &cobra.Command{
 	},
 }
 
+// resolvePageNewCwd determines the cwd for a new page based on priority:
+// 1. --cwd flag (if explicitly set)
+// 2. Second positional argument
+// 3. Default workspace: ~/.iroll/<name>/<version>/workspace/
+func resolvePageNewCwd(name, version string, args []string) (string, error) {
+	// Priority 1: --cwd flag explicitly set
+	if pageNewCwd != "" {
+		return filepath.Abs(pageNewCwd)
+	}
+	// Priority 2: second positional argument
+	if len(args) > 1 {
+		return filepath.Abs(args[1])
+	}
+	// Priority 3: default workspace
+	irollPath, err := store.IrollPath(name, version)
+	if err != nil {
+		return "", err
+	}
+	workspace := filepath.Join(irollPath, "workspace")
+	if err := os.MkdirAll(workspace, 0755); err != nil {
+		return "", err
+	}
+	return workspace, nil
+}
+
 func init() {
 	pageListCmd.Flags().StringVar(&pageListCwd, "cwd", ".", "Working directory to filter by")
 	pageListCmd.Flags().BoolVarP(&pageListAll, "all", "a", false, "List all pages across all directories")
-	pageNewCmd.Flags().StringVar(&pageNewCwd, "cwd", ".", "Working directory for the page")
+	pageNewCmd.Flags().StringVar(&pageNewCwd, "cwd", "", "Working directory for the page")
 	pageCurrentCmd.Flags().StringVar(&pageCurrentCwd, "cwd", ".", "Working directory")
 
 	pageCmd.AddCommand(pageListCmd)
