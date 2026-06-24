@@ -23,12 +23,12 @@ var queryMemoryCmd = &cobra.Command{
 	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		cwd, _ := filepath.Abs(queryMemoryCwd)
-		irollName, pageID, err := store.GetActive(cwd)
+		irollName, irollVersion, pageID, err := store.GetActive(cwd)
 		if err != nil {
 			outputError(err.Error())
 		}
 
-		conn, err := db.Open(checkedDbPath(irollName, "latest"))
+		conn, err := db.Open(checkedDbPath(irollName, irollVersion))
 		if err != nil {
 			outputError(err.Error())
 		}

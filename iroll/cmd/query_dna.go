@@ -20,12 +20,12 @@ var queryDnaCmd = &cobra.Command{
 		name := args[0]
 
 		cwd, _ := filepath.Abs(queryDnaCwd)
-		irollName, _, err := store.GetActive(cwd)
+		irollName, irollVersion, _, err := store.GetActive(cwd)
 		if err != nil {
 			outputError(err.Error())
 		}
 
-		conn, err := db.Open(checkedDbPath(irollName, "latest"))
+		conn, err := db.Open(checkedDbPath(irollName, irollVersion))
 		if err != nil {
 			outputError(err.Error())
 		}

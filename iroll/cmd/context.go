@@ -3,6 +3,7 @@ package cmd
 import (
 	"path/filepath"
 
+	"logos/builder"
 	"logos/db"
 	"logos/store"
 
@@ -21,8 +22,8 @@ var getContextCmd = &cobra.Command{
 	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		cwd, _ := filepath.Abs(getContextCwd)
-		name, pageID := resolvePage(args, getContextPage, cwd)
-		conn, err := db.Open(checkedDbPath(name, "latest"))
+		name, version, pageID := resolvePage(args, getContextPage, cwd)
+		conn, err := db.Open(checkedDbPath(name, version))
 		if err != nil {
 			outputError(err.Error())
 		}
@@ -33,7 +34,7 @@ var getContextCmd = &cobra.Command{
 			outputError(err.Error())
 		}
 
-		p.Context, err = db.ResolveContext(p.Context, checkedIrollPath(name, "latest"), conn, p.PageID)
+		p.Context, err = db.ResolveContext(p.Context, checkedIrollPath(name, version), conn, p.PageID)
 		if err != nil {
 			outputError(err.Error())
 		}
@@ -48,8 +49,8 @@ var updateContextCmd = &cobra.Command{
 	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		cwd, _ := filepath.Abs(updateContextCwd)
-		name, pageID := resolvePage(args, updateContextPage, cwd)
-		conn, err := db.Open(checkedDbPath(name, "latest"))
+		name, version, pageID := resolvePage(args, updateContextPage, cwd)
+		conn, err := db.Open(checkedDbPath(name, version))
 		if err != nil {
 			outputError(err.Error())
 		}
@@ -64,19 +65,23 @@ var updateContextCmd = &cobra.Command{
 	},
 }
 
-// resolvePage returns (name, pageID) from args or active page for the cwd
-func resolvePage(args []string, flagPage string, cwd string) (string, string) {
+// resolvePage returns (name, version, pageID) from args or active page for the cwd
+func resolvePage(args []string, flagPage string, cwd string) (string, string, string) {
 	if len(args) > 0 {
-		return args[0], flagPage
+		name, version, err := builder.ParseTag(args[0])
+		if err != nil {
+			outputError(err.Error())
+		}
+		return name, version, flagPage
 	}
-	name, pageID, err := store.GetActive(cwd)
+	name, version, pageID, err := store.GetActive(cwd)
 	if err != nil {
 		outputError(err.Error())
 	}
 	if flagPage != "" {
-		return name, flagPage
+		return name, version, flagPage
 	}
-	return name, pageID
+	return name, version, pageID
 }
 
 func init() {
