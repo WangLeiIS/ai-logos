@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"logos/builder"
@@ -36,7 +37,7 @@ func runEvolving(cmd *cobra.Command, args []string) {
 	dbPath := checkedDbPath(name, version)
 
 	sql := resolveEvolvingSQL(args)
-	if sql == "" {
+	if sql == "" || strings.TrimSpace(sql) == "" {
 		outputError("no SQL provided (use --sql, positional args, --file, or stdin)")
 	}
 
@@ -60,21 +61,19 @@ func runEvolving(cmd *cobra.Command, args []string) {
 // resolveEvolvingTarget resolves the target iroll (name, version).
 // If the first positional argument looks like a tag, use it; otherwise detect from --cwd.
 func resolveEvolvingTarget(args []string) (string, string) {
-	if len(args) > 0 {
-		first := args[0]
-		// Tags never contain spaces
-		if !strings.Contains(first, " ") {
-			if err := safepath.ValidateName(strings.SplitN(first, ":", 2)[0]); err == nil {
-				name, version, err := builder.ParseTag(first)
-				if err == nil {
-					return name, version
-				}
-			}
+	if isTagArg(args) {
+		name, version, err := builder.ParseTag(args[0])
+		if err == nil {
+			return name, version
 		}
 	}
 
 	// Auto-detect from cwd
-	name, version, _, err := store.GetActive(evolvingCwd)
+	absCwd, err := filepath.Abs(evolvingCwd)
+	if err != nil {
+		outputError(fmt.Sprintf("resolve cwd: %v", err))
+	}
+	name, version, _, err := store.GetActive(absCwd)
 	if err != nil {
 		outputError(err.Error())
 	}
