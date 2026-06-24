@@ -1,8 +1,10 @@
 package cmd
 
 import (
+	"fmt"
 	"path/filepath"
 
+	"logos/builder"
 	"logos/db"
 	"logos/store"
 
@@ -21,12 +23,12 @@ var pageCurrentCmd = &cobra.Command{
 	Short: "Show current active page",
 	Run: func(cmd *cobra.Command, args []string) {
 		cwd, _ := filepath.Abs(pageCurrentCwd)
-		irollName, pageID, err := store.GetActive(cwd)
+		irollName, irollVersion, pageID, err := store.GetActive(cwd)
 		if err != nil {
 			outputError(err.Error())
 		}
 
-		conn, err := db.Open(checkedDbPath(irollName, "latest"))
+		conn, err := db.Open(checkedDbPath(irollName, irollVersion))
 		if err != nil {
 			outputError(err.Error())
 		}
@@ -72,8 +74,11 @@ var pageListCmd = &cobra.Command{
 			return
 		}
 
-		name := args[0]
-		conn, err := db.Open(checkedDbPath(name, "latest"))
+		name, version, err := builder.ParseTag(args[0])
+		if err != nil {
+			outputError(fmt.Sprintf("invalid tag: %v", err))
+		}
+		conn, err := db.Open(checkedDbPath(name, version))
 		if err != nil {
 			outputError(err.Error())
 		}
@@ -96,13 +101,16 @@ var pageListCmd = &cobra.Command{
 }
 
 var pageNewCmd = &cobra.Command{
-	Use:   "new <name>",
+	Use:   "new <iroll-name>",
 	Short: "Create a new page",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		name := args[0]
+		name, version, err := builder.ParseTag(args[0])
+		if err != nil {
+			outputError(fmt.Sprintf("invalid tag: %v", err))
+		}
 		cwd, _ := filepath.Abs(pageNewCwd)
-		conn, err := db.Open(checkedDbPath(name, "latest"))
+		conn, err := db.Open(checkedDbPath(name, version))
 		if err != nil {
 			outputError(err.Error())
 		}
@@ -113,11 +121,11 @@ var pageNewCmd = &cobra.Command{
 			outputError(err.Error())
 		}
 
-		if err := store.IndexPage(name, p.PageID, cwd); err != nil {
+		if err := store.IndexPage(name, version, p.PageID, cwd); err != nil {
 			outputError(err.Error())
 		}
 
-		p.Context, err = db.ResolveContext(p.Context, checkedIrollPath(name, "latest"), conn, p.PageID)
+		p.Context, err = db.ResolveContext(p.Context, checkedIrollPath(name, version), conn, p.PageID)
 		if err != nil {
 			outputError(err.Error())
 		}
@@ -132,7 +140,7 @@ var pageSwitchCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		pageID := args[0]
-		irollName, err := store.SwitchPage(pageID)
+		irollName, _, err := store.SwitchPage(pageID)
 		if err != nil {
 			outputError(err.Error())
 		}
