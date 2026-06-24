@@ -94,9 +94,9 @@ func TestRunLoopLifecycleUsesCurrentPageMainByDefault(t *testing.T) {
 	if err != nil || string(updated.Progress) != progress {
 		t.Fatalf("runLoopUpdate = %#v, %v", updated, err)
 	}
-	current, err := runLoopCurrent(cwd)
-	if err != nil || current.Focus.Main == nil || current.Focus.Main.ID != main.ID {
-		t.Fatalf("runLoopCurrent = %#v, %v", current, err)
+	runs, err := runLoopPs(cwd, false)
+	if err != nil || len(runs) == 0 || runs[0].ID != main.ID {
+		t.Fatalf("runLoopPs = %#v, %v", runs, err)
 	}
 	completed, err := runLoopComplete(cwd, nil, `{"summary":"done"}`)
 	if err != nil || completed.ID != main.ID || completed.Status != "completed" {
@@ -156,7 +156,7 @@ func TestLoopRunCommandWiringAndIDValidation(t *testing.T) {
 		{name: "complete", use: "complete [run-id]", flags: []string{"result", "cwd"}, required: []string{"result"}},
 		{name: "abort", use: "abort [run-id]", flags: []string{"reason", "result", "cwd"}, required: []string{"reason"}},
 		{name: "reflect", use: "reflect <run-id>", flags: []string{"content", "cwd"}, required: []string{"content"}},
-		{name: "current", use: "current", flags: []string{"cwd"}},
+		{name: "ps", use: "ps", flags: []string{"all", "cwd"}},
 		{name: "history", use: "history <name>", flags: []string{"page", "limit", "cwd"}},
 		{name: "show", use: "show <run-id>", flags: []string{"cwd"}},
 	}
@@ -344,7 +344,7 @@ func TestLoopCommandWiringAndFlags(t *testing.T) {
 		flags    []string
 		required []string
 	}{
-		{name: "list", use: "list", flags: []string{"archived", "cwd"}},
+		{name: "list", use: "list", flags: []string{"archived", "stats", "cwd"}},
 		{name: "inspect", use: "inspect <name>", flags: []string{"cwd"}},
 		{name: "add", use: "add <name>", flags: []string{"describe", "content", "weight", "cwd"}, required: []string{"describe", "content"}},
 		{name: "edit", use: "edit <name>", flags: []string{"describe", "content", "weight", "cwd"}},
@@ -428,7 +428,7 @@ func TestLoopEditCommandDoesNotReuseChangedFlags(t *testing.T) {
 
 func TestLoopListCommandDoesNotReuseFlagValues(t *testing.T) {
 	var archived []bool
-	command := newLoopListCmd(func(cwd string, includeArchived bool) error {
+	command := newLoopListCmd(func(cwd string, includeArchived bool, _ bool) error {
 		archived = append(archived, includeArchived)
 		return nil
 	})

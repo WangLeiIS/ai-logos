@@ -118,8 +118,7 @@ func ListAllPages(cwd string) ([]map[string]interface{}, error) {
 			return nil, err
 		}
 		result = append(result, map[string]interface{}{
-			"iroll_name":    name,
-			"iroll_version": version,
+			"iroll":      name + ":" + version,
 			"page_id":       pid,
 			"cwd":           c,
 			"created_at":    t,

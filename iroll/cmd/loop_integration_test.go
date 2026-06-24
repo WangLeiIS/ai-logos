@@ -55,18 +55,18 @@ func TestLoopEndToEndAcrossIndependentPages(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	gotA, err := db.BuildLoopContext(conn, pageA.PageID)
+	runsA, err := db.ListActiveRuns(conn, pageA.PageID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	gotB, err := db.BuildLoopContext(conn, pageB.PageID)
+	runsB, err := db.ListActiveRuns(conn, pageB.PageID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if gotA.Focus.Main != nil {
-		t.Fatalf("page A still focused after completion: %#v", gotA.Focus.Main)
+	if len(runsA) != 0 {
+		t.Fatalf("page A still has active runs after completion: %#v", runsA)
 	}
-	if gotB.Focus.Main == nil || gotB.Focus.Main.ID != runB.ID || runA.ID == runB.ID {
-		t.Fatalf("page B focus = %#v; runs A=%d B=%d", gotB.Focus.Main, runA.ID, runB.ID)
+	if len(runsB) == 0 || runsB[0].ID != runB.ID || runA.ID == runB.ID {
+		t.Fatalf("page B runs = %#v; runs A=%d B=%d", runsB, runA.ID, runB.ID)
 	}
 }

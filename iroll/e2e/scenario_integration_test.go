@@ -358,8 +358,9 @@ func TestSkillDiscoveryAndQuery(t *testing.T) {
 }
 
 // TestLoopAutoInjectionInContext inserts a seed, starts a run, then verifies
-// that BuildLoopContext returns Focus.Main and Available, and that
-// ResolveContext injects a "loop" field into the resolved JSON.
+// that ListActiveRuns returns the active run and ListAvailableLoopSeeds
+// returns available seeds, and that ResolveContext injects "loop_focus"
+// and "loop_available" fields into the resolved JSON.
 func TestLoopAutoInjectionInContext(t *testing.T) {
 	env := testenv.New(t)
 
@@ -390,27 +391,31 @@ func TestLoopAutoInjectionInContext(t *testing.T) {
 		t.Fatalf("StartLoopRun: %v", err)
 	}
 
-	// BuildLoopContext should show Focus.Main.
-	ctx, err := db.BuildLoopContext(conn, page.PageID)
+	// ListActiveRuns should show the active main run.
+	runs, err := db.ListActiveRuns(conn, page.PageID)
 	if err != nil {
-		t.Fatalf("BuildLoopContext: %v", err)
+		t.Fatalf("ListActiveRuns: %v", err)
 	}
-	if ctx.Focus.Main == nil {
-		t.Fatal("BuildLoopContext Focus.Main is nil, want non-nil")
+	if len(runs) == 0 {
+		t.Fatal("ListActiveRuns returned no runs, want at least 1")
 	}
-	if ctx.Focus.Main.SeedName != "daily-sync" {
-		t.Fatalf("Focus.Main.SeedName = %q, want 'daily-sync'", ctx.Focus.Main.SeedName)
+	if runs[0].SeedName != "daily-sync" {
+		t.Fatalf("runs[0].SeedName = %q, want 'daily-sync'", runs[0].SeedName)
 	}
-	if ctx.Focus.Main.Status != "active" {
-		t.Fatalf("Focus.Main.Status = %q, want 'active'", ctx.Focus.Main.Status)
-	}
-
-	// Available should contain the seeds (our seed + 2 from init_data).
-	if len(ctx.Available) == 0 {
-		t.Fatal("BuildLoopContext Available is empty, want at least one seed")
+	if runs[0].Status != "active" {
+		t.Fatalf("runs[0].Status = %q, want 'active'", runs[0].Status)
 	}
 
-	// ResolveContext should inject a "loop" field.
+	// ListAvailableLoopSeeds should contain the seeds (our seed + 2 from init_data).
+	seeds, err := db.ListAvailableLoopSeeds(conn)
+	if err != nil {
+		t.Fatalf("ListAvailableLoopSeeds: %v", err)
+	}
+	if len(seeds) == 0 {
+		t.Fatal("ListAvailableLoopSeeds returned no seeds, want at least one")
+	}
+
+	// ResolveContext should inject "loop_focus" and "loop_available" fields.
 	irollPath, err := store.IrollPath("ctx-inject-test", "latest")
 	if err != nil {
 		t.Fatalf("IrollPath: %v", err)
@@ -426,31 +431,32 @@ func TestLoopAutoInjectionInContext(t *testing.T) {
 		t.Fatalf("parse resolved context: %v", err)
 	}
 
-	// Verify "loop" key exists.
-	loopRaw, ok := parsed["loop"]
+	// Verify "loop_focus" key exists.
+	loopFocusRaw, ok := parsed["loop_focus"]
 	if !ok {
-		t.Fatal("resolved context missing 'loop' key")
+		t.Fatal("resolved context missing 'loop_focus' key")
 	}
 
-	// Verify the loop field contains focus with main run.
-	var loopView struct {
-		Focus struct {
-			Main *struct {
-				SeedName string `json:"seed_name"`
-				Status   string `json:"status"`
-			} `json:"main"`
-		} `json:"focus"`
+	// Verify loop_focus contains the active run.
+	var loopRuns []struct {
+		SeedName string `json:"seed_name"`
+		Status   string `json:"status"`
 	}
-	if err := json.Unmarshal(loopRaw, &loopView); err != nil {
-		t.Fatalf("parse loop field: %v", err)
+	if err := json.Unmarshal(loopFocusRaw, &loopRuns); err != nil {
+		t.Fatalf("parse loop_focus: %v", err)
 	}
-	if loopView.Focus.Main == nil {
-		t.Fatal("loop.focus.main is nil, want non-nil")
+	if len(loopRuns) == 0 {
+		t.Fatal("loop_focus is empty, want at least one run")
 	}
-	if loopView.Focus.Main.SeedName != "daily-sync" {
-		t.Fatalf("loop.focus.main.seed_name = %q, want 'daily-sync'", loopView.Focus.Main.SeedName)
+	if loopRuns[0].SeedName != "daily-sync" {
+		t.Fatalf("loop_focus[0].seed_name = %q, want 'daily-sync'", loopRuns[0].SeedName)
 	}
-	if loopView.Focus.Main.Status != "active" {
-		t.Fatalf("loop.focus.main.status = %q, want 'active'", loopView.Focus.Main.Status)
+	if loopRuns[0].Status != "active" {
+		t.Fatalf("loop_focus[0].status = %q, want 'active'", loopRuns[0].Status)
+	}
+
+	// Verify "loop_available" key exists.
+	if _, ok := parsed["loop_available"]; !ok {
+		t.Fatal("resolved context missing 'loop_available' key")
 	}
 }

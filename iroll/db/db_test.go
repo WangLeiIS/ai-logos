@@ -114,7 +114,7 @@ func TestResolveContextAllowsNestedFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ResolveContext returned error: %v", err)
 	}
-	if got != `{"greeting":"hello","loop":{"focus":{"main":null,"children":[]},"available":[]}}` {
+	if got != `{"greeting":"hello","loop_available":[],"loop_focus":[]}` {
 		t.Fatalf("ResolveContext = %s, want nested file content", got)
 	}
 }
