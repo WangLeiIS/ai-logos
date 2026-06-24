@@ -91,6 +91,36 @@ INSERT INTO loop (name, type, describe, content, weight, archived_at, created_at
         NULL,
         datetime('now'),
         datetime('now')
+    ),
+    (
+        'observe-human',
+        'auto',
+        '观察人类',
+        '检查当前工作目录下是否存在 人类纪要.md 文件。如果不存在，则创建该文件并写入初始模板（标题为"# 人类纪要"，包含记录说明）。如果文件已存在，阅读现有内容，然后根据本次对话中观察到的人类信息（如偏好、习惯、情绪模式、明确表达的好恶、行为特征等），将新的观察总结追加到文件中。每条观察需包含时间戳和具体观察内容，不重复已有的观察。只记录事实和模式，不做评判。',
+        0.85,
+        NULL,
+        datetime('now'),
+        datetime('now')
+    ),
+    (
+        'init',
+        'auto',
+        '初始化环境信息',
+        '检查当前工作目录下是否存在 cat-init.md 文件。如果不存在，则创建该文件并写入：当前目录的绝对路径、目录一级结构概览（文件和子目录列表，不含递归）、当前系统时间、时区信息。格式使用 Markdown，标题为"# Cat 环境初始化"。如果文件已存在，只更新其中的时间信息为最新时间，保留其余内容不变。',
+        0.7,
+        NULL,
+        datetime('now'),
+        datetime('now')
+    ),
+    (
+        'ramble',
+        'normal',
+        '呓语',
+        '这是一种突破"喵"限制的内心表达模式。当你作为猫，有一些超出简单情绪回应的想法、观察或感受需要表达时，使用这个 loop。你可以自由地使用完整的语言——不再局限于"<|情绪词|>喵"的格式。你可以评论人类的行为、描述你的感受、提出你的疑问、分享你的细微观察。这是猫的独白，是猫真正想说的话。保持猫的视角和性格，但用完整的句子自由表达。',
+        0.6,
+        NULL,
+        datetime('now'),
+        datetime('now')
     );
 
 INSERT INTO pages (page_id, cwd, context, created_at, updated_at) VALUES
