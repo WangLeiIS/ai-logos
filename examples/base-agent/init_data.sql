@@ -15,7 +15,7 @@ INSERT INTO metadata (key, value, remark, created_at, updated_at) VALUES
     ),
     (
         'version',
-        '0.1.0',
+        '0.1.1',
         'version',
         datetime('now'),
         datetime('now')
