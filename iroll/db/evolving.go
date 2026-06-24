@@ -116,6 +116,9 @@ func executeQuery(exe execer, stmt string) (EvolvingResult, error) {
 		}
 		result = append(result, row)
 	}
+	if err := rows.Err(); err != nil {
+		return EvolvingResult{}, fmt.Errorf("rows iteration: %w", err)
+	}
 	if result == nil {
 		result = [][]string{}
 	}
