@@ -7,19 +7,21 @@ import (
 	"github.com/spf13/pflag"
 )
 
-func newLoopListCmd(run func(string, bool) error) *cobra.Command {
+func newLoopListCmd(run func(string, bool, bool) error) *cobra.Command {
 	var cwd string
 	var includeArchived bool
+	var stats bool
 	command := &cobra.Command{
 		Use:   "list",
 		Short: "List loop seeds",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			defer resetLoopSeedFlags(cmd)
-			return run(cwd, includeArchived)
+			return run(cwd, includeArchived, stats)
 		},
 	}
 	command.Flags().BoolVar(&includeArchived, "archived", false, "Include archived loop seeds")
+	command.Flags().BoolVar(&stats, "stats", false, "Include run statistics per seed")
 	command.Flags().StringVar(&cwd, "cwd", ".", "Working directory")
 	isolateLoopSeedCommand(command)
 	return command
@@ -135,13 +137,30 @@ func newLoopRestoreCmd(run func(string, string) error) *cobra.Command {
 	return command
 }
 
-func outputLoopList(cwd string, includeArchived bool) error {
+func outputLoopList(cwd string, includeArchived bool, stats bool) error {
+	if stats {
+		seeds, err := runLoopListStats(cwd, includeArchived)
+		if err != nil {
+			outputError(err.Error())
+		}
+		outputJSON(seeds)
+		return nil
+	}
 	seeds, err := runLoopList(cwd, includeArchived)
 	if err != nil {
 		outputError(err.Error())
 	}
 	outputJSON(seeds)
 	return nil
+}
+
+func runLoopListStats(cwd string, includeArchived bool) ([]db.AvailableLoopSeed, error) {
+	_, _, conn, err := openActiveLoop(cwd)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+	return db.ListAvailableLoopSeeds(conn)
 }
 
 func outputLoopInspect(cwd, name string) error {

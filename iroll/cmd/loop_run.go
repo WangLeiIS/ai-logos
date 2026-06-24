@@ -10,6 +10,24 @@ import (
 	"github.com/spf13/cobra"
 )
 
+func newLoopPsCmd(run func(string, bool) error) *cobra.Command {
+	var cwd string
+	var all bool
+	command := &cobra.Command{
+		Use:   "ps",
+		Short: "List loop runs for the current page",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			defer resetLoopSeedFlags(cmd)
+			return run(cwd, all)
+		},
+	}
+	command.Flags().StringVar(&cwd, "cwd", ".", "Working directory")
+	command.Flags().BoolVarP(&all, "all", "a", false, "Show all runs including completed/aborted")
+	isolateLoopSeedCommand(command)
+	return command
+}
+
 func parseLoopRunID(value string) (int64, error) {
 	id, err := strconv.ParseInt(value, 10, 64)
 	if err != nil || id <= 0 {
@@ -151,22 +169,6 @@ func newLoopReflectCmd(run func(string, int64, string) error) *cobra.Command {
 	return command
 }
 
-func newLoopCurrentCmd(run func(string) error) *cobra.Command {
-	var cwd string
-	command := &cobra.Command{
-		Use:   "current",
-		Short: "Show the current page loop focus",
-		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			defer resetLoopSeedFlags(cmd)
-			return run(cwd)
-		},
-	}
-	command.Flags().StringVar(&cwd, "cwd", ".", "Working directory")
-	isolateLoopSeedCommand(command)
-	return command
-}
-
 func newLoopHistoryCmd(run func(string, string, string, int) error) *cobra.Command {
 	var cwd, pageID string
 	var limit int
@@ -251,13 +253,28 @@ func outputLoopReflect(cwd string, runID int64, content string) error {
 	return nil
 }
 
-func outputLoopCurrent(cwd string) error {
-	view, err := runLoopCurrent(cwd)
+func outputLoopPs(cwd string, all bool) error {
+	runs, err := runLoopPs(cwd, all)
 	if err != nil {
 		outputError(err.Error())
 	}
-	outputJSON(view)
+	if runs == nil {
+		runs = []db.LoopRun{}
+	}
+	outputJSON(runs)
 	return nil
+}
+
+func runLoopPs(cwd string, all bool) ([]db.LoopRun, error) {
+	_, pageID, conn, err := openActiveLoop(cwd)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+	if all {
+		return db.ListAllRuns(conn, pageID)
+	}
+	return db.ListActiveRuns(conn, pageID)
 }
 
 func outputLoopHistory(cwd, seedName, pageID string, limit int) error {
@@ -321,15 +338,6 @@ func runLoopReflect(cwd string, runID int64, content string) (*db.LoopRun, error
 	}
 	defer conn.Close()
 	return db.ReflectLoopRun(conn, runID, content)
-}
-
-func runLoopCurrent(cwd string) (*db.LoopContextView, error) {
-	_, pageID, conn, err := openActiveLoop(cwd)
-	if err != nil {
-		return nil, err
-	}
-	defer conn.Close()
-	return db.BuildLoopContext(conn, pageID)
 }
 
 func runLoopHistory(cwd, seedName, pageID string, limit int) ([]db.LoopRun, error) {

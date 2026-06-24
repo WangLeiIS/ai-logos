@@ -31,7 +31,7 @@ func newLoopCmd() *cobra.Command {
 		newLoopCompleteCmd(outputLoopComplete),
 		newLoopAbortCmd(outputLoopAbort),
 		newLoopReflectCmd(outputLoopReflect),
-		newLoopCurrentCmd(outputLoopCurrent),
+		newLoopPsCmd(outputLoopPs),
 		newLoopHistoryCmd(outputLoopHistory),
 		newLoopShowCmd(outputLoopShow),
 	)
