@@ -468,7 +468,7 @@ func ListActiveChildLoopRuns(conn *sql.DB, mainRunID int64) ([]LoopRun, error) {
 
 func getActiveLoopSeedForRun(tx *sql.Tx, name string) (*LoopSeed, error) {
 	seed, err := scanLoopSeed(tx.QueryRow(`
-		SELECT id, name, describe, content, weight, archived_at, created_at, updated_at
+		SELECT id, name, type, describe, content, weight, archived_at, created_at, updated_at
 		FROM loop
 		WHERE name = ? AND archived_at IS NULL
 	`, name))

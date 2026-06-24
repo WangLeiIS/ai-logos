@@ -16,17 +16,17 @@ var (
 	ErrInvalidLoopSeed       = errors.New("invalid loop seed")
 )
 
-func InsertLoopSeed(conn *sql.DB, name, describe, content string, weight float64) (*LoopSeed, error) {
-	name, describe, content, err := validateLoopSeed(name, describe, content, weight)
+func InsertLoopSeed(conn *sql.DB, name, loopType, describe, content string, weight float64) (*LoopSeed, error) {
+	name, loopType, describe, content, err := validateLoopSeed(name, loopType, describe, content, weight)
 	if err != nil {
 		return nil, err
 	}
 
 	now := nowISO()
 	result, err := conn.Exec(`
-		INSERT INTO loop (name, describe, content, weight, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?)
-	`, name, describe, content, weight, now, now)
+		INSERT INTO loop (name, type, describe, content, weight, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+	`, name, loopType, describe, content, weight, now, now)
 	if err != nil {
 		if isUniqueConstraint(err) {
 			return nil, fmt.Errorf("loop seed %q already exists: %w", name, ErrLoopSeedAlreadyExists)
@@ -40,6 +40,7 @@ func InsertLoopSeed(conn *sql.DB, name, describe, content string, weight float64
 	return &LoopSeed{
 		ID:        id,
 		Name:      name,
+		Type:      loopType,
 		Describe:  describe,
 		Content:   content,
 		Weight:    weight,
@@ -53,12 +54,12 @@ func UpdateLoopSeed(conn *sql.DB, name string, patch LoopSeedPatch) (*LoopSeed, 
 	if err != nil {
 		return nil, err
 	}
-	if patch.Describe == nil && patch.Content == nil && patch.Weight == nil {
+	if patch.Type == nil && patch.Describe == nil && patch.Content == nil && patch.Weight == nil {
 		return nil, fmt.Errorf("loop seed update: no fields supplied: %w", ErrInvalidLoopSeed)
 	}
 
-	fields := make([]string, 0, 4)
-	args := make([]any, 0, 5)
+	fields := make([]string, 0, 5)
+	args := make([]any, 0, 6)
 	if patch.Describe != nil {
 		describe, err := validateLoopSeedText("describe", *patch.Describe)
 		if err != nil {
@@ -82,6 +83,14 @@ func UpdateLoopSeed(conn *sql.DB, name string, patch LoopSeedPatch) (*LoopSeed, 
 		fields = append(fields, "weight = ?")
 		args = append(args, *patch.Weight)
 	}
+	if patch.Type != nil {
+		loopType, err := validateLoopSeedType(*patch.Type)
+		if err != nil {
+			return nil, err
+		}
+		fields = append(fields, "type = ?")
+		args = append(args, loopType)
+	}
 	fields = append(fields, "updated_at = ?")
 	args = append(args, nowISO(), name)
 
@@ -104,7 +113,7 @@ func GetLoopSeedByName(conn *sql.DB, name string) (*LoopSeed, error) {
 		return nil, err
 	}
 	seed, err := scanLoopSeed(conn.QueryRow(`
-		SELECT id, name, describe, content, weight, archived_at, created_at, updated_at
+		SELECT id, name, type, describe, content, weight, archived_at, created_at, updated_at
 		FROM loop
 		WHERE name = ?
 	`, name))
@@ -119,7 +128,7 @@ func GetLoopSeedByName(conn *sql.DB, name string) (*LoopSeed, error) {
 
 func ListLoopSeeds(conn *sql.DB, includeArchived bool) ([]LoopSeed, error) {
 	query := `
-		SELECT id, name, describe, content, weight, archived_at, created_at, updated_at
+		SELECT id, name, type, describe, content, weight, archived_at, created_at, updated_at
 		FROM loop
 	`
 	if !includeArchived {
@@ -217,23 +226,27 @@ func setLoopSeedArchived(conn *sql.DB, name string, archived bool) (*LoopSeed, e
 	return seed, nil
 }
 
-func validateLoopSeed(name, describe, content string, weight float64) (string, string, string, error) {
+func validateLoopSeed(name, loopType, describe, content string, weight float64) (string, string, string, string, error) {
 	name, err := validateLoopSeedName(name)
 	if err != nil {
-		return "", "", "", err
+		return "", "", "", "", err
+	}
+	loopType, err = validateLoopSeedType(loopType)
+	if err != nil {
+		return "", "", "", "", err
 	}
 	describe, err = validateLoopSeedText("describe", describe)
 	if err != nil {
-		return "", "", "", err
+		return "", "", "", "", err
 	}
 	content, err = validateLoopSeedText("content", content)
 	if err != nil {
-		return "", "", "", err
+		return "", "", "", "", err
 	}
 	if err := validateLoopSeedWeight(weight); err != nil {
-		return "", "", "", err
+		return "", "", "", "", err
 	}
-	return name, describe, content, nil
+	return name, loopType, describe, content, nil
 }
 
 func validateLoopSeedName(name string) (string, error) {
@@ -255,6 +268,16 @@ func validateLoopSeedWeight(weight float64) error {
 	return nil
 }
 
+func validateLoopSeedType(loopType string) (string, error) {
+	loopType = strings.TrimSpace(loopType)
+	switch loopType {
+	case "auto", "normal":
+		return loopType, nil
+	default:
+		return "", fmt.Errorf("loop seed type must be 'auto' or 'normal', got %q: %w", loopType, ErrInvalidLoopSeed)
+	}
+}
+
 func loopSeedNotFound(name string) error {
 	return fmt.Errorf("loop seed %q not found: %w", name, ErrLoopSeedNotFound)
 }
@@ -269,14 +292,14 @@ type loopSeedScanner interface {
 }
 
 const loopSeedReturning = `
-	RETURNING id, name, describe, content, weight, archived_at, created_at, updated_at
+	RETURNING id, name, type, describe, content, weight, archived_at, created_at, updated_at
 `
 
 func scanLoopSeed(scanner loopSeedScanner) (*LoopSeed, error) {
 	var seed LoopSeed
 	var archivedAt sql.NullString
 	if err := scanner.Scan(
-		&seed.ID, &seed.Name, &seed.Describe, &seed.Content, &seed.Weight,
+		&seed.ID, &seed.Name, &seed.Type, &seed.Describe, &seed.Content, &seed.Weight,
 		&archivedAt, &seed.CreatedAt, &seed.UpdatedAt,
 	); err != nil {
 		return nil, err
