@@ -61,39 +61,40 @@ func TestStartLoopRunRejectsMissingPageWithStableError(t *testing.T) {
 	}
 }
 
-func TestStartLoopRunRejectsSecondMainPerPageButAllowsOtherPage(t *testing.T) {
+func TestStartLoopRunAllowsMultipleMainPerPage(t *testing.T) {
 	conn := setupLoopRunTest(t)
 
-	if _, err := StartLoopRun(conn, "page-a", "review", nil, "null"); err != nil {
+	first, err := StartLoopRun(conn, "page-a", "review", nil, "null")
+	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := StartLoopRun(conn, "page-a", "review", nil, "null"); err == nil ||
-		!errors.Is(err, ErrActiveMainLoopRunExists) ||
-		!strings.Contains(err.Error(), `page "page-a" already has an active main loop run`) {
-		t.Fatalf("second main error = %v", err)
+	second, err := StartLoopRun(conn, "page-a", "review", nil, "null")
+	if err != nil {
+		t.Fatalf("second main run should be allowed: %v", err)
+	}
+	if first.ID == second.ID {
+		t.Fatalf("expected different runs, got same id %d", first.ID)
 	}
 	if _, err := StartLoopRun(conn, "page-b", "review", nil, "null"); err != nil {
 		t.Fatalf("same seed on another page: %v", err)
 	}
 }
 
-func TestStartLoopRunConcurrentSamePageReturnsStableConflict(t *testing.T) {
+func TestStartLoopRunConcurrentSamePageBothSucceed(t *testing.T) {
 	firstConn, secondConn := setupConcurrentLoopRunTest(t)
 	errs := startLoopRunsConcurrently(firstConn, secondConn, "page-a", "page-a")
 
-	var successCount, conflictCount int
+	var successCount int
 	for _, err := range errs {
 		switch {
 		case err == nil:
 			successCount++
-		case errors.Is(err, ErrActiveMainLoopRunExists):
-			conflictCount++
 		default:
 			t.Fatalf("unexpected concurrent start error: %v", err)
 		}
 	}
-	if successCount != 1 || conflictCount != 1 {
-		t.Fatalf("successes = %d, conflicts = %d, errors = %v", successCount, conflictCount, errs)
+	if successCount != 2 {
+		t.Fatalf("successes = %d, want 2, errors = %v", successCount, errs)
 	}
 }
 

@@ -269,7 +269,7 @@ func TestBuildBaseAgentContainsLoopSchema(t *testing.T) {
 	}
 
 	assertTableColumns(t, conn, "loop", []string{
-		"id", "name", "describe", "content", "weight", "archived_at", "created_at", "updated_at",
+		"id", "name", "type", "describe", "content", "weight", "archived_at", "created_at", "updated_at",
 	})
 	assertTableColumns(t, conn, "loop_runs", []string{
 		"id", "loop_id", "page_id", "parent_run_id",
@@ -284,7 +284,6 @@ func TestBuildBaseAgentContainsLoopSchema(t *testing.T) {
 	assertIndexExists(t, conn, "idx_loop_runs_loop_ended")
 	assertIndexColumns(t, conn, "idx_loop_runs_loop_ended", []string{"loop_id ASC", "ended_at DESC", "id DESC"})
 	assertIndexSQLContains(t, conn, "idx_loop_runs_loop_ended", "ended_at IS NOT NULL")
-	assertIndexExists(t, conn, "idx_loop_runs_one_active_main")
 
 	assertExecFails(t, conn, `
 		INSERT INTO loop (name, describe, content, weight, created_at, updated_at)
@@ -304,7 +303,6 @@ func TestBuildBaseAgentContainsLoopSchema(t *testing.T) {
 		LIMIT 1
 	`, "idx_loop_runs_loop_ended")
 
-	assertLoopRunInsertFails(t, conn, 1, "page-one", nil, "active")
 	assertLoopRunInsertFails(t, conn, 1, "page-two", nil, "pending")
 	assertLoopRunInsertFails(t, conn, 9999, "page-two", nil, "active")
 	assertLoopRunInsertFails(t, conn, 1, "page-two", int64(9999), "active")

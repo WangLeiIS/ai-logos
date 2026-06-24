@@ -12,10 +12,9 @@ import (
 )
 
 var (
-	ErrLoopRunNotFound         = errors.New("loop run not found")
-	ErrInvalidLoopRun          = errors.New("invalid loop run")
-	ErrActiveMainLoopRunExists = errors.New("active main loop run already exists")
-	ErrInvalidLoopRunParent    = errors.New("invalid loop run parent")
+	ErrLoopRunNotFound      = errors.New("loop run not found")
+	ErrInvalidLoopRun       = errors.New("invalid loop run")
+	ErrInvalidLoopRunParent = errors.New("invalid loop run parent")
 )
 
 func StartLoopRun(conn *sql.DB, pageID, seedName string, parentRunID *int64, plan string) (_ *LoopRun, err error) {
@@ -115,21 +114,10 @@ func startLoopRunOnce(conn *sql.DB, pageID, seedName string, parentRunID *int64,
 	if err != nil {
 		return nil, err
 	}
-	if parentRunID == nil {
-		var activeMainID int64
-		checkErr := tx.QueryRow(`
-			SELECT id
-			FROM loop_runs
-			WHERE page_id = ? AND status = 'active' AND parent_run_id IS NULL
-		`, pageID).Scan(&activeMainID)
-		if checkErr == nil {
-			return nil, activeMainLoopRunExists(pageID)
+	if parentRunID != nil {
+		if err = validateLoopRunParent(tx, *parentRunID, pageID); err != nil {
+			return nil, err
 		}
-		if !errors.Is(checkErr, sql.ErrNoRows) {
-			return nil, fmt.Errorf("check active main loop run for page %q: %w", pageID, checkErr)
-		}
-	} else if err = validateLoopRunParent(tx, *parentRunID, pageID); err != nil {
-		return nil, err
 	}
 
 	now := nowISO()
@@ -146,9 +134,6 @@ func startLoopRunOnce(conn *sql.DB, pageID, seedName string, parentRunID *int64,
 		plan, now, now,
 	))
 	if err != nil {
-		if parentRunID == nil && isUniqueConstraint(err) {
-			return nil, activeMainLoopRunExists(pageID)
-		}
 		return nil, fmt.Errorf("start loop run for page %q with seed %q: %w", pageID, seedName, err)
 	}
 	if err = tx.Commit(); err != nil {
@@ -424,7 +409,8 @@ func resolveRunForMutation(tx *sql.Tx, pageID string, runID *int64) (*LoopRun, e
 			SELECT `+loopRunColumns+`
 			FROM loop_runs
 			WHERE page_id = ? AND status = 'active' AND parent_run_id IS NULL
-		`, pageID))
+				ORDER BY id DESC LIMIT 1
+			`, pageID))
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("active main loop run for page %q not found: %w", pageID, ErrLoopRunNotFound)
 		}
@@ -471,6 +457,7 @@ func GetActiveMainLoopRun(conn *sql.DB, pageID string) (*LoopRun, error) {
 		SELECT `+loopRunColumns+`
 		FROM loop_runs
 		WHERE page_id = ? AND status = 'active' AND parent_run_id IS NULL
+		ORDER BY id DESC LIMIT 1
 	`, pageID))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, fmt.Errorf("active main loop run for page %q not found: %w", pageID, ErrLoopRunNotFound)
@@ -554,10 +541,6 @@ func validateLoopRunText(field, value string) (string, error) {
 		return "", fmt.Errorf("loop run %s must not be blank: %w", field, ErrInvalidLoopRun)
 	}
 	return value, nil
-}
-
-func activeMainLoopRunExists(pageID string) error {
-	return fmt.Errorf("page %q already has an active main loop run: %w", pageID, ErrActiveMainLoopRunExists)
 }
 
 func loopRunNotFound(runID int64) error {
