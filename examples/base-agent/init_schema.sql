@@ -30,6 +30,7 @@ CREATE TABLE dna (
 CREATE TABLE loop (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL UNIQUE,
+    type TEXT NOT NULL DEFAULT 'normal' CHECK (type IN ('auto', 'normal')),
     describe TEXT NOT NULL,
     content TEXT NOT NULL,
     weight REAL NOT NULL DEFAULT 0.5 CHECK (weight >= 0 AND weight <= 1),

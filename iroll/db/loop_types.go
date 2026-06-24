@@ -8,6 +8,7 @@ import (
 type LoopSeed struct {
 	ID         int64   `json:"id"`
 	Name       string  `json:"name"`
+	Type       string  `json:"type"` // "auto" | "normal"
 	Describe   string  `json:"describe"`
 	Content    string  `json:"content"`
 	Weight     float64 `json:"weight"`
@@ -17,6 +18,7 @@ type LoopSeed struct {
 }
 
 type LoopSeedPatch struct {
+	Type     *string
 	Describe *string
 	Content  *string
 	Weight   *float64

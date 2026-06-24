@@ -71,9 +71,10 @@ INSERT INTO memory (page_id, name, question, content, importance, sleep_count, c
         datetime('now')
     );
 
-INSERT INTO loop (name, describe, content, weight, archived_at, created_at, updated_at) VALUES
+INSERT INTO loop (name, type, describe, content, weight, archived_at, created_at, updated_at) VALUES
     (
         'self-cognition',
+        'auto',
         '自我认知',
         '阅读所有 context 和 dna，了解自己的身份',
         0.9,
@@ -83,6 +84,7 @@ INSERT INTO loop (name, describe, content, weight, archived_at, created_at, upda
     ),
     (
         'daily-check',
+        'auto',
         '日常检查',
         '检查 dna 和 memory，决定当前需要关注的事项',
         0.8,
