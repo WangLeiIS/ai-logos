@@ -223,11 +223,23 @@ func ResolveContext(rawContext string, irollPath string, db *sql.DB, pageID stri
 		resolved[k] = value
 	}
 
-	loop, err := BuildLoopContext(db, pageID)
+	focus, err := ListActiveRuns(db, pageID)
 	if err != nil {
 		return "", err
 	}
-	resolved["loop"] = loop
+	if focus == nil {
+		focus = []LoopRun{}
+	}
+	resolved["loop_focus"] = focus
+
+	available, err := ListAvailableLoopSeeds(db)
+	if err != nil {
+		return "", err
+	}
+	if available == nil {
+		available = []AvailableLoopSeed{}
+	}
+	resolved["loop_available"] = available
 
 	out, err := json.Marshal(resolved)
 	if err != nil {

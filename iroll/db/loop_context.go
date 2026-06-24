@@ -19,47 +19,8 @@ type AvailableLoopSeed struct {
 	Stats LoopSeedStats `json:"stats"`
 }
 
-type LoopContextView struct {
-	Focus struct {
-		Main     *LoopRun  `json:"main"`
-		Children []LoopRun `json:"children"`
-	} `json:"focus"`
-	Available []AvailableLoopSeed `json:"available"`
-}
-
-func BuildLoopContext(conn *sql.DB, pageID string) (*LoopContextView, error) {
-	view := &LoopContextView{
-		Available: make([]AvailableLoopSeed, 0),
-	}
-	view.Focus.Children = make([]LoopRun, 0)
-
-	runs, err := listActivePageLoopRuns(conn, pageID)
-	if err != nil {
-		return nil, err
-	}
-	for i := range runs {
-		if runs[i].ParentRunID == nil {
-			view.Focus.Main = &runs[i]
-			break
-		}
-	}
-	if view.Focus.Main != nil {
-		for i := range runs {
-			if runs[i].ParentRunID != nil && *runs[i].ParentRunID == view.Focus.Main.ID {
-				view.Focus.Children = append(view.Focus.Children, runs[i])
-			}
-		}
-	}
-
-	available, err := listAvailableLoopSeeds(conn)
-	if err != nil {
-		return nil, err
-	}
-	view.Available = available
-	return view, nil
-}
-
-func listActivePageLoopRuns(conn *sql.DB, pageID string) ([]LoopRun, error) {
+// ListActiveRuns returns all active loop runs for a page, main run first then children.
+func ListActiveRuns(conn *sql.DB, pageID string) ([]LoopRun, error) {
 	rows, err := conn.Query(`
 		SELECT `+loopRunColumns+`
 		FROM loop_runs
@@ -67,25 +28,43 @@ func listActivePageLoopRuns(conn *sql.DB, pageID string) ([]LoopRun, error) {
 		ORDER BY CASE WHEN parent_run_id IS NULL THEN 0 ELSE 1 END, id
 	`, pageID)
 	if err != nil {
-		return nil, fmt.Errorf("list active loop focus for page %q: %w", pageID, err)
+		return nil, fmt.Errorf("list active runs for page %q: %w", pageID, err)
 	}
 	defer rows.Close()
+	return scanLoopRuns(rows)
+}
 
+// ListAllRuns returns all loop runs (any status) for a page, newest first.
+func ListAllRuns(conn *sql.DB, pageID string) ([]LoopRun, error) {
+	rows, err := conn.Query(`
+		SELECT `+loopRunColumns+`
+		FROM loop_runs
+		WHERE page_id = ?
+		ORDER BY id DESC
+	`, pageID)
+	if err != nil {
+		return nil, fmt.Errorf("list all runs for page %q: %w", pageID, err)
+	}
+	defer rows.Close()
+	return scanLoopRuns(rows)
+}
+
+func scanLoopRuns(rows *sql.Rows) ([]LoopRun, error) {
 	runs := make([]LoopRun, 0)
 	for rows.Next() {
 		run, err := scanLoopRun(rows)
 		if err != nil {
-			return nil, fmt.Errorf("scan active loop focus for page %q: %w", pageID, err)
+			return nil, err
 		}
 		runs = append(runs, *run)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("list active loop focus for page %q: %w", pageID, err)
+		return nil, err
 	}
 	return runs, nil
 }
 
-func listAvailableLoopSeeds(conn *sql.DB) ([]AvailableLoopSeed, error) {
+func ListAvailableLoopSeeds(conn *sql.DB) ([]AvailableLoopSeed, error) {
 	rows, err := conn.Query(availableLoopSeedsQuery)
 	if err != nil {
 		return nil, fmt.Errorf("list available loop seeds: %w", err)
