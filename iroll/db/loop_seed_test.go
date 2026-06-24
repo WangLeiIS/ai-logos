@@ -154,6 +154,14 @@ func TestLoopSeedRejectsDuplicateAndInvalidValues(t *testing.T) {
 	}
 }
 
+func TestLoopSeedRejectsInvalidType(t *testing.T) {
+	conn := openLoopTestDB(t)
+	_, err := InsertLoopSeed(conn, "test", "invalid", "desc", "content", 0.5)
+	if err == nil || !errors.Is(err, ErrInvalidLoopSeed) || !strings.Contains(err.Error(), "type must be") {
+		t.Fatalf("invalid type error = %v", err)
+	}
+}
+
 func TestLoopSeedUpdateRejectsEmptyAndInvalidPatch(t *testing.T) {
 	conn := openLoopTestDB(t)
 	if _, err := InsertLoopSeed(conn, "review", "normal", "Review", "Review memory", 0.5); err != nil {

@@ -159,6 +159,11 @@ func TestListAvailableLoopSeedsIsGlobal(t *testing.T) {
 	if got := []string{seeds[0].Name, seeds[1].Name, seeds[2].Name}; got[0] != "heavy" || got[1] != "alpha" || got[2] != "review" {
 		t.Fatalf("available order = %v", got)
 	}
+	for _, s := range seeds {
+		if s.Type != "normal" {
+			t.Fatalf("seed %q type = %q, want 'normal'", s.Name, s.Type)
+		}
+	}
 	review := seeds[2]
 	if review.Stats.Active != 1 || review.Stats.Completed != 1 || review.Stats.Aborted != 1 {
 		t.Fatalf("review stats = %#v", review.Stats)
@@ -345,6 +350,11 @@ func TestResolveContextInjectsPageLoopViewAndReplacesRawLoop(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Insert an auto seed — should NOT appear in loop_available
+	if _, err := InsertLoopSeed(conn, "auto-hidden", "auto", "Auto hidden", "Hidden content", 0.9); err != nil {
+		t.Fatal(err)
+	}
+
 	got, err := ResolveContext(`{"system_prompt":"hello","loop":"stale"}`, t.TempDir(), conn, "page-a")
 	if err != nil {
 		t.Fatal(err)
@@ -367,6 +377,12 @@ func TestResolveContextInjectsPageLoopViewAndReplacesRawLoop(t *testing.T) {
 	}
 	if context["loop_available"] == nil {
 		t.Fatal("loop_available is nil")
+	}
+	for _, s := range context["loop_available"].([]any) {
+		seed := s.(map[string]any)
+		if seed["name"].(string) == "auto-hidden" {
+			t.Fatal("auto seed appeared in loop_available")
+		}
 	}
 	if context["system_prompt"] != "hello" {
 		t.Fatalf("ordinary context changed: %#v", context)

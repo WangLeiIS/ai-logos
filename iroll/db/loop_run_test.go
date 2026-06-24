@@ -696,6 +696,65 @@ func TestLoopRunConcurrentChildStartAndMainEndPreservesLifecycleInvariant(t *tes
 	}
 }
 
+func TestAutoStartLoopSeedsStartsAllAutoAndSkipsArchived(t *testing.T) {
+	conn := setupLoopRunTest(t)
+	insertLoopTestPage(t, conn, "page-auto")
+	if _, err := InsertLoopSeed(conn, "auto-one", "auto", "Auto one", "Do auto one", 0.9); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := InsertLoopSeed(conn, "auto-two", "auto", "Auto two", "Do auto two", 0.8); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := InsertLoopSeed(conn, "auto-archived", "auto", "Auto archived", "Archived content", 0.7); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := InsertLoopSeed(conn, "normal-seed", "normal", "Normal", "Normal content", 0.5); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ArchiveLoopSeed(conn, "auto-archived"); err != nil {
+		t.Fatal(err)
+	}
+
+	runs, err := AutoStartLoopSeeds(conn, "page-auto")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(runs) != 2 {
+		t.Fatalf("auto runs = %d, want 2", len(runs))
+	}
+	// Highest weight should start first
+	if runs[0].SeedName != "auto-one" || runs[1].SeedName != "auto-two" {
+		t.Fatalf("auto run order = %#v", runs)
+	}
+	for _, r := range runs {
+		if r.Status != "active" || string(r.Plan) != "null" {
+			t.Fatalf("auto run %d = %#v", r.ID, r)
+		}
+	}
+
+	// Verify normal seed was NOT auto-started
+	active, err := ListActiveRuns(conn, "page-auto")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(active) != 2 {
+		t.Fatalf("active runs = %d, want 2", len(active))
+	}
+}
+
+func TestAutoStartLoopSeedsNoAutoSeeds(t *testing.T) {
+	conn := setupLoopRunTest(t)
+	insertLoopTestPage(t, conn, "page-no-auto")
+
+	runs, err := AutoStartLoopSeeds(conn, "page-no-auto")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(runs) != 0 {
+		t.Fatalf("auto runs = %d, want 0", len(runs))
+	}
+}
+
 func setupLoopRunTest(t *testing.T) *sql.DB {
 	t.Helper()
 	conn := openLoopTestDB(t)
