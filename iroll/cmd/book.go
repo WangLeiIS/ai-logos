@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"logos/book"
+	"logos/builder"
 	"logos/db"
 	"logos/store"
 
@@ -70,11 +71,11 @@ var bookQueryCmd = &cobra.Command{
 }
 
 func runBookList(cwd string, names []string) ([]book.Book, error) {
-	name, err := resolveBookRoll(cwd, names)
+	name, version, err := resolveBookRoll(cwd, names)
 	if err != nil {
 		return nil, err
 	}
-	conn, err := openBookDB(name)
+	conn, err := openBookDB(name, version)
 	if err != nil {
 		return nil, err
 	}
@@ -83,11 +84,11 @@ func runBookList(cwd string, names []string) ([]book.Book, error) {
 }
 
 func runBookInspect(cwd, bookID string, names []string) (*book.Book, error) {
-	name, err := resolveBookRoll(cwd, names)
+	name, version, err := resolveBookRoll(cwd, names)
 	if err != nil {
 		return nil, err
 	}
-	conn, err := openBookDB(name)
+	conn, err := openBookDB(name, version)
 	if err != nil {
 		return nil, err
 	}
@@ -99,11 +100,11 @@ func runBookQuery(ctx context.Context, cwd string, query book.Query) (*book.Quer
 	if err := validateBookQuery(query); err != nil {
 		return nil, err
 	}
-	name, err := resolveBookRoll(cwd, nil)
+	name, version, err := resolveBookRoll(cwd, nil)
 	if err != nil {
 		return nil, err
 	}
-	conn, err := openBookDB(name)
+	conn, err := openBookDB(name, version)
 	if err != nil {
 		return nil, err
 	}
@@ -112,7 +113,7 @@ func runBookQuery(ctx context.Context, cwd string, query book.Query) (*book.Quer
 	if err != nil {
 		return nil, err
 	}
-	rollRoot, err := store.IrollPath(name, "latest")
+	rollRoot, err := store.IrollPath(name, version)
 	if err != nil {
 		return nil, err
 	}
@@ -135,26 +136,30 @@ func validateBookQuery(query book.Query) error {
 	return nil
 }
 
-func resolveBookRoll(cwd string, names []string) (string, error) {
+func resolveBookRoll(cwd string, names []string) (string, string, error) {
 	if len(names) > 1 {
-		return "", fmt.Errorf("at most one iroll name may be specified")
+		return "", "", fmt.Errorf("at most one iroll name may be specified")
 	}
 	if len(names) == 1 {
-		if _, err := store.IrollPath(names[0], "latest"); err != nil {
-			return "", err
+		name, version, err := builder.ParseTag(names[0])
+		if err != nil {
+			return "", "", err
 		}
-		return names[0], nil
+		if _, err := store.IrollPath(name, version); err != nil {
+			return "", "", err
+		}
+		return name, version, nil
 	}
 	absoluteCwd, err := filepath.Abs(cwd)
 	if err != nil {
-		return "", fmt.Errorf("resolve cwd: %w", err)
+		return "", "", fmt.Errorf("resolve cwd: %w", err)
 	}
-	name, _, err := store.GetActive(absoluteCwd)
-	return name, err
+	name, version, _, err := store.GetActive(absoluteCwd)
+	return name, version, err
 }
 
-func openBookDB(name string) (*sql.DB, error) {
-	path, err := store.DbPath(name, "latest")
+func openBookDB(name, version string) (*sql.DB, error) {
+	path, err := store.DbPath(name, version)
 	if err != nil {
 		return nil, err
 	}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"logos/builder"
 	"logos/db"
 	"logos/skill"
 	"logos/store"
@@ -24,11 +25,11 @@ var skillListCmd = &cobra.Command{
 	Short: "List registered skills",
 	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		name, err := resolveSkillRoll(skillListCwd, args)
+		name, version, err := resolveSkillRoll(skillListCwd, args)
 		if err != nil {
 			outputError(err.Error())
 		}
-		conn, err := openSkillDB(name)
+		conn, err := openSkillDB(name, version)
 		if err != nil {
 			outputError(err.Error())
 		}
@@ -42,7 +43,7 @@ var skillListCmd = &cobra.Command{
 			skills = []skill.Skill{}
 		}
 
-		rollRoot, err := store.IrollPath(name, "latest")
+		rollRoot, err := store.IrollPath(name, version)
 		if err != nil {
 			outputError(err.Error())
 		}
@@ -72,11 +73,11 @@ var skillShowCmd = &cobra.Command{
 	Short: "Show a registered skill's metadata and file path",
 	Args:  cobra.RangeArgs(1, 2),
 	Run: func(cmd *cobra.Command, args []string) {
-		name, err := resolveSkillRoll(skillShowCwd, args[1:])
+		name, version, err := resolveSkillRoll(skillShowCwd, args[1:])
 		if err != nil {
 			outputError(err.Error())
 		}
-		conn, err := openSkillDB(name)
+		conn, err := openSkillDB(name, version)
 		if err != nil {
 			outputError(err.Error())
 		}
@@ -87,7 +88,7 @@ var skillShowCmd = &cobra.Command{
 			outputError(err.Error())
 		}
 
-		rollRoot, err := store.IrollPath(name, "latest")
+		rollRoot, err := store.IrollPath(name, version)
 		if err != nil {
 			outputError(err.Error())
 		}
@@ -115,26 +116,30 @@ var skillShowCmd = &cobra.Command{
 	},
 }
 
-func resolveSkillRoll(cwd string, names []string) (string, error) {
+func resolveSkillRoll(cwd string, names []string) (string, string, error) {
 	if len(names) > 1 {
-		return "", fmt.Errorf("at most one iroll name may be specified")
+		return "", "", fmt.Errorf("at most one iroll name may be specified")
 	}
 	if len(names) == 1 {
-		if _, err := store.IrollPath(names[0], "latest"); err != nil {
-			return "", err
+		name, version, err := builder.ParseTag(names[0])
+		if err != nil {
+			return "", "", err
 		}
-		return names[0], nil
+		if _, err := store.IrollPath(name, version); err != nil {
+			return "", "", err
+		}
+		return name, version, nil
 	}
 	absoluteCwd, err := filepath.Abs(cwd)
 	if err != nil {
-		return "", fmt.Errorf("resolve cwd: %w", err)
+		return "", "", fmt.Errorf("resolve cwd: %w", err)
 	}
-	name, _, err := store.GetActive(absoluteCwd)
-	return name, err
+	name, version, _, err := store.GetActive(absoluteCwd)
+	return name, version, err
 }
 
-func openSkillDB(name string) (*sql.DB, error) {
-	path, err := store.DbPath(name, "latest")
+func openSkillDB(name, version string) (*sql.DB, error) {
+	path, err := store.DbPath(name, version)
 	if err != nil {
 		return nil, err
 	}
