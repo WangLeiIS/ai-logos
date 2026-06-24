@@ -77,7 +77,7 @@ func ListAvailableLoopSeeds(conn *sql.DB) ([]AvailableLoopSeed, error) {
 		var archivedAt, lastEndedAt sql.NullString
 		var lastResult string
 		if err := rows.Scan(
-			&seed.ID, &seed.Name, &seed.Describe, &seed.Content, &seed.Weight,
+			&seed.ID, &seed.Name, &seed.Type, &seed.Describe, &seed.Content, &seed.Weight,
 			&archivedAt, &seed.CreatedAt, &seed.UpdatedAt,
 			&seed.Stats.Active, &seed.Stats.Completed, &seed.Stats.Aborted,
 			&lastEndedAt, &lastResult,
@@ -113,7 +113,7 @@ const availableLoopSeedsQuery = `
 		GROUP BY loop_id
 	)
 	SELECT
-		loop.id, loop.name, loop.describe, loop.content, loop.weight,
+		loop.id, loop.name, loop.type, loop.describe, loop.content, loop.weight,
 		loop.archived_at, loop.created_at, loop.updated_at,
 		COALESCE(stats.active, 0),
 		COALESCE(stats.completed, 0),

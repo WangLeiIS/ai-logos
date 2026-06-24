@@ -9,13 +9,13 @@ import (
 
 func TestListActiveRunsIsPageScoped(t *testing.T) {
 	conn := setupLoopRunTest(t)
-	if _, err := InsertLoopSeed(conn, "heavy", "Heavy work", "Do heavy work", 0.9); err != nil {
+	if _, err := InsertLoopSeed(conn, "heavy", "normal", "Heavy work", "Do heavy work", 0.9); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := InsertLoopSeed(conn, "alpha", "Alpha work", "Do alpha work", 0.8); err != nil {
+	if _, err := InsertLoopSeed(conn, "alpha", "normal", "Alpha work", "Do alpha work", 0.8); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := InsertLoopSeed(conn, "archived", "Archived work", "Do archived work", 1); err != nil {
+	if _, err := InsertLoopSeed(conn, "archived", "normal", "Archived work", "Do archived work", 1); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := ArchiveLoopSeed(conn, "archived"); err != nil {
@@ -98,13 +98,13 @@ func TestListActiveRunsIsPageScoped(t *testing.T) {
 
 func TestListAvailableLoopSeedsIsGlobal(t *testing.T) {
 	conn := setupLoopRunTest(t)
-	if _, err := InsertLoopSeed(conn, "heavy", "Heavy work", "Do heavy work", 0.9); err != nil {
+	if _, err := InsertLoopSeed(conn, "heavy", "normal", "Heavy work", "Do heavy work", 0.9); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := InsertLoopSeed(conn, "alpha", "Alpha work", "Do alpha work", 0.8); err != nil {
+	if _, err := InsertLoopSeed(conn, "alpha", "normal", "Alpha work", "Do alpha work", 0.8); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := InsertLoopSeed(conn, "archived", "Archived work", "Do archived work", 1); err != nil {
+	if _, err := InsertLoopSeed(conn, "archived", "normal", "Archived work", "Do archived work", 1); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := ArchiveLoopSeed(conn, "archived"); err != nil {

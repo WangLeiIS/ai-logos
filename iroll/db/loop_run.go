@@ -43,6 +43,47 @@ func StartLoopRun(conn *sql.DB, pageID, seedName string, parentRunID *int64, pla
 	}
 }
 
+// AutoStartLoopSeeds starts all non-archived auto-type loop seeds for a new page.
+// Returns the created runs. If no auto seeds exist, returns an empty slice.
+func AutoStartLoopSeeds(conn *sql.DB, pageID string) ([]LoopRun, error) {
+	pageID, err := validateLoopRunText("page ID", pageID)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := conn.Query(`
+		SELECT name FROM loop
+		WHERE type = 'auto' AND archived_at IS NULL
+		ORDER BY weight DESC, name ASC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("list auto seeds for page %q: %w", pageID, err)
+	}
+	defer rows.Close()
+
+	var seedNames []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, fmt.Errorf("scan auto seed for page %q: %w", pageID, err)
+		}
+		seedNames = append(seedNames, name)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list auto seeds for page %q: %w", pageID, err)
+	}
+
+	runs := make([]LoopRun, 0, len(seedNames))
+	for _, name := range seedNames {
+		run, err := StartLoopRun(conn, pageID, name, nil, "null")
+		if err != nil {
+			return nil, fmt.Errorf("auto-start seed %q for page %q: %w", name, pageID, err)
+		}
+		runs = append(runs, *run)
+	}
+	return runs, nil
+}
+
 const (
 	loopRunMaxRetries       = 8
 	defaultLoopHistoryLimit = 50

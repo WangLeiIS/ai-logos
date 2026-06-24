@@ -35,7 +35,7 @@ func TestNormalizeLoopJSONPreservesJSONAndWrapsText(t *testing.T) {
 
 func TestLoopSeedLifecycle(t *testing.T) {
 	conn := openLoopTestDB(t)
-	seed, err := InsertLoopSeed(conn, " review ", " Review memory ", " Inspect useful memories ", 0.8)
+	seed, err := InsertLoopSeed(conn, " review ", "normal", " Review memory ", " Inspect useful memories ", 0.8)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +96,7 @@ func TestLoopSeedLifecycle(t *testing.T) {
 func TestLoopSeedListUsesStableOrderAndArchivedFilter(t *testing.T) {
 	conn := openLoopTestDB(t)
 	for _, name := range []string{"zeta", "alpha", "middle"} {
-		if _, err := InsertLoopSeed(conn, name, name, name, 0.5); err != nil {
+		if _, err := InsertLoopSeed(conn, name, "normal", name, name, 0.5); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -122,10 +122,10 @@ func TestLoopSeedListUsesStableOrderAndArchivedFilter(t *testing.T) {
 
 func TestLoopSeedRejectsDuplicateAndInvalidValues(t *testing.T) {
 	conn := openLoopTestDB(t)
-	if _, err := InsertLoopSeed(conn, "review", "Review", "Review memory", 0.5); err != nil {
+	if _, err := InsertLoopSeed(conn, "review", "normal", "Review", "Review memory", 0.5); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := InsertLoopSeed(conn, " review ", "Other", "Other", 0.5); err == nil ||
+	if _, err := InsertLoopSeed(conn, " review ", "normal", "Other", "Other", 0.5); err == nil ||
 		!errors.Is(err, ErrLoopSeedAlreadyExists) || !strings.Contains(err.Error(), "already exists") {
 		t.Fatalf("duplicate error = %v", err)
 	}
@@ -146,7 +146,7 @@ func TestLoopSeedRejectsDuplicateAndInvalidValues(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := InsertLoopSeed(conn, tt.seedName, tt.describe, tt.content, tt.weight)
+			_, err := InsertLoopSeed(conn, tt.seedName, "normal", tt.describe, tt.content, tt.weight)
 			if err == nil || !errors.Is(err, ErrInvalidLoopSeed) || !strings.Contains(err.Error(), tt.want) {
 				t.Fatalf("InsertLoopSeed error = %v, want %q", err, tt.want)
 			}
@@ -156,7 +156,7 @@ func TestLoopSeedRejectsDuplicateAndInvalidValues(t *testing.T) {
 
 func TestLoopSeedUpdateRejectsEmptyAndInvalidPatch(t *testing.T) {
 	conn := openLoopTestDB(t)
-	if _, err := InsertLoopSeed(conn, "review", "Review", "Review memory", 0.5); err != nil {
+	if _, err := InsertLoopSeed(conn, "review", "normal", "Review", "Review memory", 0.5); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := UpdateLoopSeed(conn, "review", LoopSeedPatch{}); err == nil ||
@@ -178,7 +178,7 @@ func TestLoopSeedUpdateRejectsEmptyAndInvalidPatch(t *testing.T) {
 
 func TestLoopSeedMutationsReturnTheirOwnUpdatedRow(t *testing.T) {
 	conn := openLoopTestDB(t)
-	if _, err := InsertLoopSeed(conn, "review", "Review", "Review memory", 0.5); err != nil {
+	if _, err := InsertLoopSeed(conn, "review", "normal", "Review", "Review memory", 0.5); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := conn.Exec(`
@@ -258,7 +258,7 @@ func TestLoopSeedMissingErrorsAreStable(t *testing.T) {
 
 func TestLoopSeedRemoveWithHistoryRequiresArchive(t *testing.T) {
 	conn := openLoopTestDB(t)
-	seed, err := InsertLoopSeed(conn, "review", "Review", "Review memory", 0.5)
+	seed, err := InsertLoopSeed(conn, "review", "normal", "Review", "Review memory", 0.5)
 	if err != nil {
 		t.Fatal(err)
 	}

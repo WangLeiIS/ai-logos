@@ -240,7 +240,7 @@ func runLoopAdd(cwd, name, describe, content string, weight float64) (*db.LoopSe
 		return nil, err
 	}
 	defer conn.Close()
-	return db.InsertLoopSeed(conn, name, describe, content, weight)
+	return db.InsertLoopSeed(conn, name, "normal", describe, content, weight)
 }
 
 func runLoopEdit(cwd, name string, patch db.LoopSeedPatch) (*db.LoopSeed, error) {

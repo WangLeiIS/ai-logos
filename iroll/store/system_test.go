@@ -156,7 +156,7 @@ func setupDeletePageStoreTest(t *testing.T) (*sql.DB, string, int64, int64) {
 	if _, err := conn.Exec(string(schema)); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := rolldb.InsertLoopSeed(conn, "review", "Review memory", "Inspect memories", 0.8); err != nil {
+	if _, err := rolldb.InsertLoopSeed(conn, "review", "normal", "Review memory", "Inspect memories", 0.8); err != nil {
 		t.Fatal(err)
 	}
 	page, err := rolldb.InsertPage(conn, "/work")

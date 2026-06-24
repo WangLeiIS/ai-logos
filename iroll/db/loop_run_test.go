@@ -502,7 +502,7 @@ func TestReflectLoopRunOnlyAllowsEndedRunsAndReplacesReflection(t *testing.T) {
 
 func TestListLoopHistoryFiltersOrdersByDescendingIDAndLimits(t *testing.T) {
 	conn := setupLoopRunTest(t)
-	if _, err := InsertLoopSeed(conn, "other", "Other", "Other work", 0.5); err != nil {
+	if _, err := InsertLoopSeed(conn, "other", "normal", "Other", "Other work", 0.5); err != nil {
 		t.Fatal(err)
 	}
 	first := mustStartLoopRun(t, conn, "page-a", nil)
@@ -701,7 +701,7 @@ func setupLoopRunTest(t *testing.T) *sql.DB {
 	insertLoopTestPage(t, conn, "page-a")
 	insertLoopTestPage(t, conn, "page-b")
 	insertLoopTestPage(t, conn, "page-c")
-	if _, err := InsertLoopSeed(conn, "review", "Review memory", "Inspect memories", 0.8); err != nil {
+	if _, err := InsertLoopSeed(conn, "review", "normal", "Review memory", "Inspect memories", 0.8); err != nil {
 		t.Fatal(err)
 	}
 	return conn
@@ -719,7 +719,7 @@ func setupConcurrentLoopRunTest(t *testing.T) (*sql.DB, *sql.DB) {
 	applyLoopTestSchema(t, first)
 	insertLoopTestPage(t, first, "page-a")
 	insertLoopTestPage(t, first, "page-b")
-	if _, err := InsertLoopSeed(first, "review", "Review memory", "Inspect memories", 0.8); err != nil {
+	if _, err := InsertLoopSeed(first, "review", "normal", "Review memory", "Inspect memories", 0.8); err != nil {
 		t.Fatal(err)
 	}
 

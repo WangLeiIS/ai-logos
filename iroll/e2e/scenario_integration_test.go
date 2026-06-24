@@ -245,7 +245,7 @@ func TestLoopSeedAndRunWithMemory(t *testing.T) {
 	}
 
 	// Insert a loop seed.
-	seed, err := db.InsertLoopSeed(conn, "review-cycle", "Code review cycle", "Review all pending changes and report status", 0.8)
+	seed, err := db.InsertLoopSeed(conn, "review-cycle", "normal", "Code review cycle", "Review all pending changes and report status", 0.8)
 	if err != nil {
 		t.Fatalf("InsertLoopSeed: %v", err)
 	}
@@ -374,7 +374,7 @@ func TestLoopAutoInjectionInContext(t *testing.T) {
 	}
 
 	// Insert a loop seed.
-	_, err = db.InsertLoopSeed(conn, "daily-sync", "Synchronize state", "Sync all modules and report", 0.7)
+	_, err = db.InsertLoopSeed(conn, "daily-sync", "normal", "Synchronize state", "Sync all modules and report", 0.7)
 	if err != nil {
 		t.Fatalf("InsertLoopSeed: %v", err)
 	}
