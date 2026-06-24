@@ -59,7 +59,7 @@ func (e *Env) DB(name string) (*sql.DB, error) {
 }
 
 // CreatePage inserts a page into the iroll's DB and registers it in system.db.
-func (e *Env) CreatePage(name, pageID, cwd string) (*db.Page, error) {
+func (e *Env) CreatePage(name, version, pageID, cwd string) (*db.Page, error) {
 	e.t.Helper()
 	conn, err := e.DB(name)
 	if err != nil {
@@ -69,7 +69,7 @@ func (e *Env) CreatePage(name, pageID, cwd string) (*db.Page, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := store.IndexPage(name, page.PageID, cwd); err != nil {
+	if err := store.IndexPage(name, version, page.PageID, cwd); err != nil {
 		return nil, err
 	}
 	return page, nil

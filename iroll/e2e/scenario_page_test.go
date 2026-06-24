@@ -66,12 +66,12 @@ func TestPageCurrentResolvesActive(t *testing.T) {
 	}
 
 	cwd := filepath.Join(t.TempDir(), "ws")
-	page, err := env.CreatePage("page-test", "", cwd)
+	page, err := env.CreatePage("page-test", "latest", "", cwd)
 	if err != nil {
 		t.Fatalf("CreatePage returned error: %v", err)
 	}
 
-	name, pageID, err := store.GetActive(cwd)
+	name, _, pageID, err := store.GetActive(cwd)
 	if err != nil {
 		t.Fatalf("GetActive returned error: %v", err)
 	}
@@ -135,12 +135,12 @@ func TestPageSwitchChangesActive(t *testing.T) {
 	if err != nil {
 		t.Fatalf("InsertPage 1 returned error: %v", err)
 	}
-	if err := store.IndexPage("page-test", page1.PageID, cwd); err != nil {
+	if err := store.IndexPage("page-test", "latest", page1.PageID, cwd); err != nil {
 		t.Fatalf("IndexPage 1 returned error: %v", err)
 	}
 
 	// Verify page1 is active
-	name, activeID, err := store.GetActive(cwd)
+	name, _, activeID, err := store.GetActive(cwd)
 	if err != nil {
 		t.Fatalf("GetActive after page1 returned error: %v", err)
 	}
@@ -153,22 +153,22 @@ func TestPageSwitchChangesActive(t *testing.T) {
 	if err != nil {
 		t.Fatalf("InsertPage 2 returned error: %v", err)
 	}
-	if err := store.IndexPage("page-test", page2.PageID, cwd); err != nil {
+	if err := store.IndexPage("page-test", "latest", page2.PageID, cwd); err != nil {
 		t.Fatalf("IndexPage 2 returned error: %v", err)
 	}
 
 	// Switch to page1 (since page2 was made active by IndexPage above)
-	if _, err := store.SwitchPage(page1.PageID); err != nil {
+	if _, _, err := store.SwitchPage(page1.PageID); err != nil {
 		t.Fatalf("SwitchPage to page1 returned error: %v", err)
 	}
 
 	// Now switch back to page2
-	if _, err := store.SwitchPage(page2.PageID); err != nil {
+	if _, _, err := store.SwitchPage(page2.PageID); err != nil {
 		t.Fatalf("SwitchPage to page2 returned error: %v", err)
 	}
 
 	// Verify page2 is now active
-	name, activeID, err = store.GetActive(cwd)
+	name, _, activeID, err = store.GetActive(cwd)
 	if err != nil {
 		t.Fatalf("GetActive after switch returned error: %v", err)
 	}
@@ -370,7 +370,7 @@ func TestPageDeleteCleansUp(t *testing.T) {
 	if err != nil {
 		t.Fatalf("InsertPage returned error: %v", err)
 	}
-	if err := store.IndexPage("page-test", page.PageID, cwd); err != nil {
+	if err := store.IndexPage("page-test", "latest", page.PageID, cwd); err != nil {
 		t.Fatalf("IndexPage returned error: %v", err)
 	}
 
@@ -380,7 +380,7 @@ func TestPageDeleteCleansUp(t *testing.T) {
 	}
 
 	// Verify active page is set
-	name, activeID, err := store.GetActive(cwd)
+	name, _, activeID, err := store.GetActive(cwd)
 	if err != nil {
 		t.Fatalf("GetActive before delete: %v", err)
 	}
@@ -399,7 +399,7 @@ func TestPageDeleteCleansUp(t *testing.T) {
 	}
 
 	// Verify active page is cleared
-	if _, _, err := store.GetActive(cwd); err == nil {
+	if _, _, _, err := store.GetActive(cwd); err == nil {
 		t.Fatal("active page still exists after deletion")
 	}
 }

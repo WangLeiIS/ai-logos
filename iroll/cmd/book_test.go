@@ -118,7 +118,7 @@ func setupBookCommandTest(t *testing.T) (string, string) {
 	}}); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.IndexPage(rollName, "page-one", cwd); err != nil {
+	if err := store.IndexPage(rollName, "latest", "page-one", cwd); err != nil {
 		t.Fatal(err)
 	}
 	return cwd, rollRoot

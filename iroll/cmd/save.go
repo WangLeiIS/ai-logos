@@ -2,9 +2,12 @@ package cmd
 
 import (
 	"archive/zip"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+
+	"logos/builder"
 
 	"github.com/spf13/cobra"
 )
@@ -16,8 +19,11 @@ var saveCmd = &cobra.Command{
 	Short: "Save an iroll to a .iroll file",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		name := args[0]
-		srcDir := checkedIrollPath(name, "latest")
+		name, version, err := builder.ParseTag(args[0])
+		if err != nil {
+			outputError(fmt.Sprintf("invalid tag: %v", err))
+		}
+		srcDir := checkedIrollPath(name, version)
 
 		if _, err := os.Stat(srcDir); os.IsNotExist(err) {
 			outputError("iroll '" + name + "' not found")

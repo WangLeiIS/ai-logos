@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"fmt"
+	"logos/builder"
 	"logos/db"
 
 	"github.com/spf13/cobra"
@@ -11,8 +13,11 @@ var inspectCmd = &cobra.Command{
 	Short: "Show iroll details",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		name := args[0]
-		conn, err := db.Open(checkedDbPath(name, "latest"))
+		name, version, err := builder.ParseTag(args[0])
+		if err != nil {
+			outputError(fmt.Sprintf("invalid tag: %v", err))
+		}
+		conn, err := db.Open(checkedDbPath(name, version))
 		if err != nil {
 			outputError(err.Error())
 		}

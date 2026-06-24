@@ -40,7 +40,7 @@ func outputError(msg string) {
 }
 
 func checkedIrollPath(name string, version string) string {
-	path, err := store.IrollPath(name, "latest")
+	path, err := store.IrollPath(name, version)
 	if err != nil {
 		outputError(err.Error())
 	}
@@ -48,7 +48,7 @@ func checkedIrollPath(name string, version string) string {
 }
 
 func checkedDbPath(name string, version string) string {
-	path, err := store.DbPath(name, "latest")
+	path, err := store.DbPath(name, version)
 	if err != nil {
 		outputError(err.Error())
 	}

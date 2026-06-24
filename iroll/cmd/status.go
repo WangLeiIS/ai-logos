@@ -24,6 +24,7 @@ var statusCmd = &cobra.Command{
 		rolls, _ := store.List()
 
 		outputJSON(map[string]interface{}{
+			"version":     Version,
 			"home":        home,
 			"iroll_count": len(rolls),
 			"page_count":  pageCount,

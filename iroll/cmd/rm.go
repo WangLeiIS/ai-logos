@@ -1,8 +1,10 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 
+	"logos/builder"
 	"logos/store"
 
 	"github.com/spf13/cobra"
@@ -13,8 +15,11 @@ var rmCmd = &cobra.Command{
 	Short: "Remove an iroll package",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		name := args[0]
-		path := checkedIrollPath(name, "latest")
+		name, version, err := builder.ParseTag(args[0])
+		if err != nil {
+			outputError(fmt.Sprintf("invalid tag: %v", err))
+		}
+		path := checkedIrollPath(name, version)
 
 		if _, err := os.Stat(path); os.IsNotExist(err) {
 			outputError("iroll '" + name + "' not found")

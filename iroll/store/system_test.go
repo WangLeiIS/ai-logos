@@ -32,7 +32,7 @@ func TestDeletePageCleansRollBeforeIndexAndClearsActiveMapping(t *testing.T) {
 		}
 	}
 	assertPageIndexCount(t, pageID, 0, 0)
-	if _, _, err := GetActive("/work"); err == nil {
+	if _, _, _, err := GetActive("/work"); err == nil {
 		t.Fatal("active page mapping still exists")
 	}
 }
@@ -55,7 +55,7 @@ func TestDeletePageLeavesIndexIntactWhenRollCleanupFails(t *testing.T) {
 	}
 
 	assertPageIndexCount(t, pageID, 1, 1)
-	name, activePageID, err := GetActive("/work")
+	name, _, activePageID, err := GetActive("/work")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -171,7 +171,7 @@ func setupDeletePageStoreTest(t *testing.T) (*sql.DB, string, int64, int64) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := IndexPage("test-roll", page.PageID, "/work"); err != nil {
+	if err := IndexPage("test-roll", "latest", page.PageID, "/work"); err != nil {
 		t.Fatal(err)
 	}
 	return conn, page.PageID, main.ID, child.ID
