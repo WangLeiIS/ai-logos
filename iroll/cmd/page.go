@@ -121,6 +121,10 @@ var pageNewCmd = &cobra.Command{
 			outputError(err.Error())
 		}
 
+		if _, err := db.AutoStartLoopSeeds(conn, p.PageID); err != nil {
+			outputError("auto-start loop seeds: " + err.Error())
+		}
+
 		if err := store.IndexPage(name, version, p.PageID, cwd); err != nil {
 			outputError(err.Error())
 		}

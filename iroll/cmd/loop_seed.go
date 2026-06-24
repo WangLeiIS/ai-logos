@@ -43,8 +43,9 @@ func newLoopInspectCmd(run func(string, string) error) *cobra.Command {
 	return command
 }
 
-func newLoopAddCmd(run func(string, string, string, string, float64) error) *cobra.Command {
+func newLoopAddCmd(run func(string, string, string, string, string, float64) error) *cobra.Command {
 	var cwd string
+	var seedType string
 	var describe string
 	var content string
 	var weight float64
@@ -54,9 +55,10 @@ func newLoopAddCmd(run func(string, string, string, string, float64) error) *cob
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			defer resetLoopSeedFlags(cmd)
-			return run(cwd, args[0], describe, content, weight)
+			return run(cwd, args[0], seedType, describe, content, weight)
 		},
 	}
+	command.Flags().StringVar(&seedType, "type", "normal", "Seed type: auto or normal")
 	command.Flags().StringVar(&describe, "describe", "", "Loop seed description")
 	command.Flags().StringVar(&content, "content", "", "Loop seed content")
 	command.Flags().Float64Var(&weight, "weight", 0.5, "Loop seed weight")
@@ -69,6 +71,7 @@ func newLoopAddCmd(run func(string, string, string, string, float64) error) *cob
 
 func newLoopEditCmd(run func(string, string, db.LoopSeedPatch) error) *cobra.Command {
 	var cwd string
+	var seedType string
 	var describe string
 	var content string
 	var weight float64
@@ -78,9 +81,10 @@ func newLoopEditCmd(run func(string, string, db.LoopSeedPatch) error) *cobra.Com
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			defer resetLoopSeedFlags(cmd)
-			return run(cwd, args[0], loopSeedPatchFromFlags(cmd, describe, content, weight))
+			return run(cwd, args[0], loopSeedPatchFromFlags(cmd, seedType, describe, content, weight))
 		},
 	}
+	command.Flags().StringVar(&seedType, "type", "", "Seed type: auto or normal")
 	command.Flags().StringVar(&describe, "describe", "", "Loop seed description")
 	command.Flags().StringVar(&content, "content", "", "Loop seed content")
 	command.Flags().Float64Var(&weight, "weight", 0.5, "Loop seed weight")
@@ -172,8 +176,8 @@ func outputLoopInspect(cwd, name string) error {
 	return nil
 }
 
-func outputLoopAdd(cwd, name, describe, content string, weight float64) error {
-	seed, err := runLoopAdd(cwd, name, describe, content, weight)
+func outputLoopAdd(cwd, name, seedType, describe, content string, weight float64) error {
+	seed, err := runLoopAdd(cwd, name, seedType, describe, content, weight)
 	if err != nil {
 		outputError(err.Error())
 	}
@@ -234,13 +238,13 @@ func runLoopInspect(cwd, name string) (*db.LoopSeed, error) {
 	return db.GetLoopSeedByName(conn, name)
 }
 
-func runLoopAdd(cwd, name, describe, content string, weight float64) (*db.LoopSeed, error) {
+func runLoopAdd(cwd, name, seedType, describe, content string, weight float64) (*db.LoopSeed, error) {
 	_, _, conn, err := openActiveLoop(cwd)
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Close()
-	return db.InsertLoopSeed(conn, name, "normal", describe, content, weight)
+	return db.InsertLoopSeed(conn, name, seedType, describe, content, weight)
 }
 
 func runLoopEdit(cwd, name string, patch db.LoopSeedPatch) (*db.LoopSeed, error) {
@@ -279,8 +283,11 @@ func runLoopRestore(cwd, name string) (*db.LoopSeed, error) {
 	return db.RestoreLoopSeed(conn, name)
 }
 
-func loopSeedPatchFromFlags(cmd *cobra.Command, describe, content string, weight float64) db.LoopSeedPatch {
+func loopSeedPatchFromFlags(cmd *cobra.Command, seedType, describe, content string, weight float64) db.LoopSeedPatch {
 	patch := db.LoopSeedPatch{}
+	if cmd.Flags().Changed("type") {
+		patch.Type = &seedType
+	}
 	if cmd.Flags().Changed("describe") {
 		patch.Describe = &describe
 	}

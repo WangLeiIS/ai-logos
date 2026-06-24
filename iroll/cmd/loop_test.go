@@ -18,7 +18,7 @@ import (
 func TestRunLoopSeedLifecycleUsesActivePage(t *testing.T) {
 	cwd, _ := setupLoopCommandTest(t)
 
-	added, err := runLoopAdd(cwd, " review ", " Review memory ", " Inspect memories ", 0.8)
+	added, err := runLoopAdd(cwd, " review ", "normal", " Review memory ", " Inspect memories ", 0.8)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +82,7 @@ func TestRunLoopSeedLifecycleUsesActivePage(t *testing.T) {
 
 func TestRunLoopLifecycleUsesCurrentPageMainByDefault(t *testing.T) {
 	cwd, _ := setupLoopCommandTest(t)
-	if _, err := runLoopAdd(cwd, "review", "Review memory", "Inspect memories", 0.8); err != nil {
+	if _, err := runLoopAdd(cwd, "review", "normal", "Review memory", "Inspect memories", 0.8); err != nil {
 		t.Fatal(err)
 	}
 	main, err := runLoopStart(cwd, "review", nil, `{"step":1}`)
@@ -118,10 +118,10 @@ func TestRunLoopLifecycleUsesCurrentPageMainByDefault(t *testing.T) {
 
 func TestRunLoopChildMustEndBeforeMain(t *testing.T) {
 	cwd, _ := setupLoopCommandTest(t)
-	if _, err := runLoopAdd(cwd, "main", "Main", "Main", 0.8); err != nil {
+	if _, err := runLoopAdd(cwd, "main", "normal", "Main", "Main", 0.8); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := runLoopAdd(cwd, "child", "Child", "Child", 0.7); err != nil {
+	if _, err := runLoopAdd(cwd, "child", "normal", "Child", "Child", 0.7); err != nil {
 		t.Fatal(err)
 	}
 	main, err := runLoopStart(cwd, "main", nil, "plan")
@@ -222,7 +222,7 @@ func TestRunLoopSeedRejectsInvalidValuesAndNoEditFields(t *testing.T) {
 		{
 			name: "blank required",
 			run: func() error {
-				_, err := runLoopAdd(cwd, "review", " ", "content", 0.5)
+				_, err := runLoopAdd(cwd, "review", "normal", " ", "content", 0.5)
 				return err
 			},
 			want: "describe must not be blank",
@@ -230,7 +230,7 @@ func TestRunLoopSeedRejectsInvalidValuesAndNoEditFields(t *testing.T) {
 		{
 			name: "invalid weight",
 			run: func() error {
-				_, err := runLoopAdd(cwd, "review", "describe", "content", 1.1)
+				_, err := runLoopAdd(cwd, "review", "normal", "describe", "content", 1.1)
 				return err
 			},
 			want: "weight must be between 0 and 1",
@@ -255,7 +255,7 @@ func TestRunLoopSeedRejectsInvalidValuesAndNoEditFields(t *testing.T) {
 
 func TestRunLoopEditPreservesExplicitEmptyValuesForDBValidation(t *testing.T) {
 	cwd, _ := setupLoopCommandTest(t)
-	if _, err := runLoopAdd(cwd, "review", "Review", "Inspect", 0.5); err != nil {
+	if _, err := runLoopAdd(cwd, "review", "normal", "Review", "Inspect", 0.5); err != nil {
 		t.Fatal(err)
 	}
 	empty := ""
@@ -267,18 +267,19 @@ func TestRunLoopEditPreservesExplicitEmptyValuesForDBValidation(t *testing.T) {
 
 func TestLoopSeedPatchFromFlagsDistinguishesOmittedAndEmpty(t *testing.T) {
 	command := &cobra.Command{}
+	command.Flags().String("type", "", "")
 	command.Flags().String("describe", "", "")
 	command.Flags().String("content", "", "")
 	command.Flags().Float64("weight", 0.5, "")
 
-	omitted := loopSeedPatchFromFlags(command, "", "", 0.5)
-	if omitted.Describe != nil || omitted.Content != nil || omitted.Weight != nil {
+	omitted := loopSeedPatchFromFlags(command, "", "", "", 0.5)
+	if omitted.Type != nil || omitted.Describe != nil || omitted.Content != nil || omitted.Weight != nil {
 		t.Fatalf("omitted patch = %#v", omitted)
 	}
 	if err := command.Flags().Set("content", ""); err != nil {
 		t.Fatal(err)
 	}
-	explicitEmpty := loopSeedPatchFromFlags(command, "", "", 0.5)
+	explicitEmpty := loopSeedPatchFromFlags(command, "", "", "", 0.5)
 	if explicitEmpty.Content == nil || *explicitEmpty.Content != "" {
 		t.Fatalf("explicit empty patch = %#v", explicitEmpty)
 	}
@@ -286,7 +287,7 @@ func TestLoopSeedPatchFromFlagsDistinguishesOmittedAndEmpty(t *testing.T) {
 
 func TestRunLoopRemoveRejectsSeedWithHistory(t *testing.T) {
 	cwd, conn := setupLoopCommandTest(t)
-	seed, err := runLoopAdd(cwd, "review", "Review", "Inspect", 0.5)
+	seed, err := runLoopAdd(cwd, "review", "normal", "Review", "Inspect", 0.5)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -346,8 +347,8 @@ func TestLoopCommandWiringAndFlags(t *testing.T) {
 	}{
 		{name: "list", use: "list", flags: []string{"archived", "stats", "cwd"}},
 		{name: "inspect", use: "inspect <name>", flags: []string{"cwd"}},
-		{name: "add", use: "add <name>", flags: []string{"describe", "content", "weight", "cwd"}, required: []string{"describe", "content"}},
-		{name: "edit", use: "edit <name>", flags: []string{"describe", "content", "weight", "cwd"}},
+		{name: "add", use: "add <name>", flags: []string{"type", "describe", "content", "weight", "cwd"}, required: []string{"describe", "content"}},
+		{name: "edit", use: "edit <name>", flags: []string{"type", "describe", "content", "weight", "cwd"}},
 		{name: "remove", use: "remove <name>", flags: []string{"cwd"}},
 		{name: "archive", use: "archive <name>", flags: []string{"cwd"}},
 		{name: "restore", use: "restore <name>", flags: []string{"cwd"}},
@@ -375,7 +376,7 @@ func TestLoopCommandWiringAndFlags(t *testing.T) {
 
 func TestLoopAddCommandRequiresFlagsOnEveryExecution(t *testing.T) {
 	var calls int
-	command := newLoopAddCmd(func(cwd, name, describe, content string, weight float64) error {
+	command := newLoopAddCmd(func(cwd, name, seedType, describe, content string, weight float64) error {
 		calls++
 		return nil
 	})
