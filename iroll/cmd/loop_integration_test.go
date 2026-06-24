@@ -39,11 +39,11 @@ func TestLoopEndToEndAcrossIndependentPages(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	runA, err := db.StartLoopRun(conn, pageA.PageID, "self-cognition", nil, `{"steps":["read context"]}`)
+	runA, err := db.StartLoopRun(conn, pageA.PageID, "observe-human", nil, `{"steps":["read context"]}`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	runB, err := db.StartLoopRun(conn, pageB.PageID, "self-cognition", nil, `{"steps":["review dna"]}`)
+	runB, err := db.StartLoopRun(conn, pageB.PageID, "observe-human", nil, `{"steps":["review dna"]}`)
 	if err != nil {
 		t.Fatal(err)
 	}
