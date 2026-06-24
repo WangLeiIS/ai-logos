@@ -44,6 +44,6 @@ var queryDnaCmd = &cobra.Command{
 }
 
 func init() {
-	queryDnaCmd.Flags().StringVar(&queryDnaType, "type", "", "Filter by type (认知观/伦理观/审美观/本体观)")
+	queryDnaCmd.Flags().StringVar(&queryDnaType, "type", "", "Filter by DNA type")
 	queryDnaCmd.Flags().StringVar(&queryDnaCwd, "cwd", ".", "Working directory")
 }

@@ -54,14 +54,14 @@ func TestDNAInsertAndQuery(t *testing.T) {
 	}
 
 	// QueryDna by type should return only matching type entries.
-	// init_data.sql already has 'handle-correction' with type '认知观', so our
-	// 'error-handling' plus that one means 2 results.
+	// init_data.sql seeds idea/emotion entries, so only our inserted
+	// 'error-handling' entry should match '认知观'.
 	results, err = db.QueryDna(conn, "", "认知观")
 	if err != nil {
 		t.Fatalf("QueryDna by type: %v", err)
 	}
-	if len(results) < 2 {
-		t.Fatalf("QueryDna('','认知观') = %d results, want at least 2", len(results))
+	if len(results) != 1 {
+		t.Fatalf("QueryDna('','认知观') = %d results, want 1", len(results))
 	}
 	for _, d := range results {
 		if d.Type != "认知观" {
@@ -69,14 +69,14 @@ func TestDNAInsertAndQuery(t *testing.T) {
 		}
 	}
 
-	// QueryDna with no filters returns all 3 new entries (plus the 3 from init_data).
+	// QueryDna with no filters returns all 3 new entries (plus the 4 from init_data).
 	results, err = db.QueryDna(conn, "", "")
 	if err != nil {
 		t.Fatalf("QueryDna all: %v", err)
 	}
-	// init_data.sql inserts 3 + our 3 = 6 total.
-	if len(results) != 6 {
-		t.Fatalf("QueryDna('','') returned %d entries, want 6", len(results))
+	// init_data.sql inserts 4 + our 3 = 7 total.
+	if len(results) != 7 {
+		t.Fatalf("QueryDna('','') returned %d entries, want 7", len(results))
 	}
 }
 

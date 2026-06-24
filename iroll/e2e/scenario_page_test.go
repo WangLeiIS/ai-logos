@@ -232,8 +232,8 @@ func TestContextUpdateAndResolve(t *testing.T) {
 	}
 
 	// @sql should resolve to the metadata name value
-	if nameVal, _ := ctx["name_val"].(string); nameVal != "test-agent" {
-		t.Fatalf("name_val = %q, want %q", nameVal, "test-agent")
+	if nameVal, _ := ctx["name_val"].(string); nameVal != "base-cat" {
+		t.Fatalf("name_val = %q, want %q", nameVal, "base-cat")
 	}
 }
 

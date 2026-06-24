@@ -100,8 +100,8 @@ func TestBuildCreatesValidIroll(t *testing.T) {
 	if err != nil {
 		t.Fatalf("QueryAllMetadata returned error: %v", err)
 	}
-	if meta["name"] != "test-agent" {
-		t.Fatalf("metadata[name] = %q, want %q", meta["name"], "test-agent")
+	if meta["name"] != "base-cat" {
+		t.Fatalf("metadata[name] = %q, want %q", meta["name"], "base-cat")
 	}
 	if _, ok := meta["description"]; !ok {
 		t.Fatal("metadata missing 'description' key")
@@ -177,8 +177,8 @@ func TestBuildFromInheritsBaseLayer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("QueryAllMetadata child returned error: %v", err)
 	}
-	if meta["name"] != "test-agent" {
-		t.Fatalf("child metadata[name] = %q, want %q (inherited from base)", meta["name"], "test-agent")
+	if meta["name"] != "base-cat" {
+		t.Fatalf("child metadata[name] = %q, want %q (inherited from base)", meta["name"], "base-cat")
 	}
 
 	// Child inherits books from base
