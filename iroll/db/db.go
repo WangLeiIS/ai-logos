@@ -232,12 +232,15 @@ func ResolveContext(rawContext string, irollPath string, db *sql.DB, pageID stri
 	}
 	resolved["loop_focus"] = focus
 
-	available, err := ListAvailableLoopSeeds(db)
+	allSeeds, err := ListAvailableLoopSeeds(db)
 	if err != nil {
 		return "", err
 	}
-	if available == nil {
-		available = []AvailableLoopSeed{}
+	available := make([]AvailableLoopSeed, 0)
+	for _, s := range allSeeds {
+		if s.Type == "normal" {
+			available = append(available, s)
+		}
 	}
 	resolved["loop_available"] = available
 
