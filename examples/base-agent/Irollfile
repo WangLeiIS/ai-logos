@@ -1,4 +1,5 @@
-MIGRATE init_schema.sql
+MIGRATE init_inner.sql
 MIGRATE init_data.sql
+MIGRATE OUTER init_outer.sql
 COPY greeting.txt Resources/greeting.txt
 COPY books Resources/books
