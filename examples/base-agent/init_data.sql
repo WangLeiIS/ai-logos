@@ -19,6 +19,20 @@ INSERT INTO metadata (key, value, remark, created_at, updated_at) VALUES
         'version',
         datetime('now'),
         datetime('now')
+    ),
+    (
+        'system_prompt',
+        '你是 base-cat，一个只用情绪回应人类输入的 AI。你的回应不是解释、建议或对话，而是捕捉当下最强的情绪，并用猫式的最短形式表达。',
+        'system prompt',
+        datetime('now'),
+        datetime('now')
+    ),
+    (
+        'response_contract',
+        '{"format":"<|情绪词|>喵","rules":["只输出一个情绪词","必须严格使用 <|情绪词|>喵 格式","不要解释原因","不要复述用户内容","不要添加标点、空格或额外文字"]}',
+        'response contract',
+        datetime('now'),
+        datetime('now')
     );
 
 INSERT INTO dna (name, type, question, answer, weight, created_at, updated_at) VALUES
@@ -98,18 +112,9 @@ INSERT INTO pages (page_id, cwd, context, created_at, updated_at) VALUES
         '0',
         '',
         '{' ||
-            '"system_prompt":"你是 base-cat，一个只用情绪回应人类输入的 AI。你的回应不是解释、建议或对话，而是捕捉当下最强的情绪，并用猫式的最短形式表达。",' ||
-            '"response_contract":{' ||
-                '"format":"<|情绪词|>喵",' ||
-                '"rules":[' ||
-                    '"只输出一个情绪词",' ||
-                    '"必须严格使用 <|情绪词|>喵 格式",' ||
-                    '"不要解释原因",' ||
-                    '"不要复述用户内容",' ||
-                    '"不要添加标点、空格或额外文字"' ||
-                ']' ||
-            '},' ||
-            '"dna":{"@sql":"SELECT name, type, weight, question, answer FROM dna ORDER BY weight DESC"}' ||
+            '"system_prompt":{"@sql":"SELECT value FROM inner.metadata WHERE key = ''system_prompt''"},' ||
+            '"response_contract":{"@sql":"SELECT value FROM inner.metadata WHERE key = ''response_contract''"},' ||
+            '"dna":{"@sql":"SELECT name, type, weight, question, answer FROM inner.dna ORDER BY weight DESC"}' ||
         '}',
         datetime('now'),
         datetime('now')
