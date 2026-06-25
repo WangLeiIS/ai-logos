@@ -12,6 +12,53 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// Hint is a structured suggestion for the next command.
+type Hint struct {
+	Action string `json:"action"`
+	Cmd    string `json:"cmd"`
+}
+
+// Error codes for structured output.
+const (
+	ErrCodeInvalidTag    = "invalid_tag"
+	ErrCodeIrollNotFound = "iroll_not_found"
+	ErrCodeNoDefaultPage = "no_default_page"
+	ErrCodePageNotFound  = "page_not_found"
+	ErrCodeDBOpen        = "db_open_failed"
+	ErrCodeInternal      = "internal"
+)
+
+func jsonLine(v interface{}) string {
+	b, _ := json.Marshal(v)
+	return string(b)
+}
+
+// outputOK prints success three-line output to stdout.
+// data and hints are optional (nil/empty = line skipped).
+func outputOK(data interface{}, hints []Hint) {
+	fmt.Println(jsonLine(map[string]string{"status": "ok"}))
+	if data != nil {
+		fmt.Println(jsonLine(data))
+	}
+	if len(hints) > 0 {
+		fmt.Println(jsonLine(map[string]interface{}{"hints": hints}))
+	}
+}
+
+// outputFail prints error three-line output to stdout, then os.Exit(1).
+// hints is optional (nil/empty = line skipped).
+func outputFail(code, errMsg string, hints []Hint) {
+	fmt.Println(jsonLine(map[string]string{
+		"status": "error",
+		"code":   code,
+		"error":  errMsg,
+	}))
+	if len(hints) > 0 {
+		fmt.Println(jsonLine(map[string]interface{}{"hints": hints}))
+	}
+	os.Exit(1)
+}
+
 // Version is set at build time via ldflags.
 // Default "dev" means unversioned development build.
 var Version = "dev"
