@@ -310,7 +310,7 @@ func TestBuildBaseAgentContainsLoopSchema(t *testing.T) {
 	}
 	defer outerConn.Close()
 	assertTableColumns(t, outerConn, "pages", []string{
-		"id", "page_id", "cwd", "context", "created_at", "updated_at",
+		"id", "page_id", "cwd", "alias", "context", "created_at", "updated_at",
 	})
 	assertTableColumns(t, outerConn, "memory", []string{
 		"id", "page_id", "name", "question", "content", "importance", "sleep_count", "created_at", "updated_at",
