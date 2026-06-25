@@ -33,19 +33,23 @@ func jsonLine(v interface{}) string {
 	return string(b)
 }
 
-// outputOK prints success three-line output to stdout.
-// data and hints are optional (nil/empty = line skipped).
+// outputOK prints success JSON to stdout: status line, optional data line, optional hints line.
+// data and hints are optional (nil/empty = line skipped). Exits on marshal error.
 func outputOK(data interface{}, hints []Hint) {
 	fmt.Println(jsonLine(map[string]string{"status": "ok"}))
 	if data != nil {
-		fmt.Println(jsonLine(data))
+		b, err := json.Marshal(data)
+		if err != nil {
+			outputFail(ErrCodeInternal, fmt.Sprintf("JSON marshal error: %v", err), nil)
+		}
+		fmt.Println(string(b))
 	}
 	if len(hints) > 0 {
 		fmt.Println(jsonLine(map[string]interface{}{"hints": hints}))
 	}
 }
 
-// outputFail prints error three-line output to stdout, then os.Exit(1).
+// outputFail prints error JSON to stdout (error line + optional hints line), then os.Exit(1).
 // hints is optional (nil/empty = line skipped).
 func outputFail(code, errMsg string, hints []Hint) {
 	fmt.Println(jsonLine(map[string]string{
