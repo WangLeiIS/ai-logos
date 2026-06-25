@@ -39,35 +39,35 @@ func runEvolving(cmd *cobra.Command, args []string) {
 	// Use workspace default outer db (create from template if needed)
 	outerPath, err := store.WorkspaceOuterDbPath(name, version)
 	if err != nil {
-		outputError(err.Error())
+		outputFail(ErrCodeInternal, err.Error(), nil)
 	}
 	if _, err := os.Stat(outerPath); os.IsNotExist(err) {
 		templateOuter := filepath.Join(checkedIrollPath(name, version), "roll-outer.db")
 		if err := copyFile(templateOuter, outerPath); err != nil {
-			outputError(fmt.Sprintf("copy outer db template: %v", err))
+			outputFail(ErrCodeInternal, fmt.Sprintf("copy outer db template: %v", err), nil)
 		}
 	}
 
 	sql := resolveEvolvingSQL(args)
 	if sql == "" || strings.TrimSpace(sql) == "" {
-		outputError("no SQL provided (use --sql, positional args, --file, or stdin)")
+		outputFail(ErrCodeInternal, "no SQL provided (use --sql, positional args, --file, or stdin)", nil)
 	}
 
 	conn, err := db.OpenOuter(outerPath, innerPath)
 	if err != nil {
-		outputError(err.Error())
+		outputFail(ErrCodeDBOpen, err.Error(), nil)
 	}
 	defer conn.Close()
 
 	results, err := db.ExecuteAll(conn, sql, evolvingDryRun)
 	if err != nil {
 		if len(results) > 0 {
-			outputJSON(results)
+			outputOK(results, nil)
 		}
-		outputError(err.Error())
+		outputFail(ErrCodeInternal, err.Error(), nil)
 	}
 
-	outputJSON(results)
+	outputOK(results, nil)
 }
 
 // resolveEvolvingTarget resolves the target iroll (name, version).
@@ -83,11 +83,14 @@ func resolveEvolvingTarget(args []string) (string, string) {
 	// Auto-detect from cwd
 	absCwd, err := filepath.Abs(evolvingCwd)
 	if err != nil {
-		outputError(fmt.Sprintf("resolve cwd: %v", err))
+		outputFail(ErrCodeInternal, fmt.Sprintf("resolve cwd: %v", err), nil)
 	}
 	name, version, _, _, err := store.GetActive(absCwd)
 	if err != nil {
-		outputError(err.Error())
+		outputFail(ErrCodeNoActivePage, err.Error(), []Hint{
+			{Action: "Create a new page for this directory", Cmd: "logos page new <iroll-name>"},
+			{Action: "List all pages", Cmd: "logos page list -a"},
+		})
 	}
 	return name, version
 }
@@ -130,7 +133,7 @@ func resolveEvolvingSQL(args []string) string {
 	if evolvingFile != "" {
 		data, err := os.ReadFile(evolvingFile)
 		if err != nil {
-			outputError(fmt.Sprintf("read file %q: %v", evolvingFile, err))
+			outputFail(ErrCodeInternal, fmt.Sprintf("read file %q: %v", evolvingFile, err), nil)
 		}
 		return string(data)
 	}
@@ -140,7 +143,7 @@ func resolveEvolvingSQL(args []string) string {
 	if (stat.Mode() & os.ModeCharDevice) == 0 {
 		data, err := io.ReadAll(os.Stdin)
 		if err != nil {
-			outputError(fmt.Sprintf("read stdin: %v", err))
+			outputFail(ErrCodeInternal, fmt.Sprintf("read stdin: %v", err), nil)
 		}
 		return string(data)
 	}
