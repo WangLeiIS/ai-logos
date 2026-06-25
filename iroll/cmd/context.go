@@ -35,15 +35,16 @@ var getContextCmd = &cobra.Command{
 
 		p, err := db.GetPageByPageID(conn, pageID)
 		if err != nil {
-			outputError(err.Error())
+			outputFail(ErrCodeInternal, err.Error(), nil)
 		}
 
 		p.Context, err = db.ResolveContext(p.Context, checkedIrollPath(name, version), conn, p.PageID)
 		if err != nil {
-			outputError(err.Error())
+			outputFail(ErrCodeInternal, err.Error(), nil)
 		}
 
-		outputJSON(p)
+		hints := []Hint{{Action: "Get the full context including DNA, loops and system prompt", Cmd: fmt.Sprintf("logos page get-context --alias %s", p.Alias)}}
+			outputOK(p, hints)
 	},
 }
 
@@ -60,36 +61,38 @@ var updateContextCmd = &cobra.Command{
 		hasSetAlias := cmd.Flags().Changed("set-alias")
 
 		if !hasContent && !hasSetAlias {
-			outputError("at least one of --content or --set-alias is required")
+			outputFail(ErrCodeInternal, "at least one of --content or --set-alias is required", nil)
 		}
 
 		// Handle --set-alias
 		if hasSetAlias {
 			// Update alias in page_index (system.db)
 			if err := store.SetPageAlias(pageID, updateContextSetAlias); err != nil {
-				outputError(err.Error())
+				outputFail(ErrCodeInternal, err.Error(), nil)
 			}
 			// Also update alias in the iroll pages table
 			if err := db.UpdatePageAlias(conn, pageID, updateContextSetAlias); err != nil {
-				outputError(err.Error())
+				outputFail(ErrCodeInternal, err.Error(), nil)
 			}
 		}
 
 		if hasContent {
 			p, err := db.UpdatePageContext(conn, pageID, updateContextContext)
 			if err != nil {
-				outputError(err.Error())
+				outputFail(ErrCodeInternal, err.Error(), nil)
 			}
-			outputJSON(p)
+			hints := []Hint{{Action: "Get the full context including DNA, loops and system prompt", Cmd: fmt.Sprintf("logos page get-context --page %s", p.PageID)}}
+			outputOK(p, hints)
 			return
 		}
 
 		// Only alias was set, return current page
 		p, err := db.GetPageByPageID(conn, pageID)
 		if err != nil {
-			outputError(err.Error())
+			outputFail(ErrCodeInternal, err.Error(), nil)
 		}
-		outputJSON(p)
+		hints := []Hint{{Action: "Get the full context including DNA, loops and system prompt", Cmd: fmt.Sprintf("logos page get-context --alias %s", p.Alias)}}
+			outputOK(p, hints)
 	},
 }
 
@@ -101,12 +104,12 @@ func resolvePageContext(args []string, flagPage, flagAlias, flagRoll, cwd string
 	if flagPage != "" {
 		name, version, outerPath, err := store.LookupPageByID(flagPage)
 		if err != nil {
-			outputError(err.Error())
+			outputFail(ErrCodeInternal, err.Error(), nil)
 		}
 		innerPath := checkedInnerPath(name, version)
 		conn, err := db.OpenOuter(outerPath, innerPath)
 		if err != nil {
-			outputError(err.Error())
+			outputFail(ErrCodeInternal, err.Error(), nil)
 		}
 		return name, version, flagPage, conn
 	}
@@ -115,12 +118,12 @@ func resolvePageContext(args []string, flagPage, flagAlias, flagRoll, cwd string
 	if flagAlias != "" {
 		name, version, pageID, outerPath, err := store.LookupPageByAlias(flagAlias)
 		if err != nil {
-			outputError(err.Error())
+			outputFail(ErrCodeInternal, err.Error(), nil)
 		}
 		innerPath := checkedInnerPath(name, version)
 		conn, err := db.OpenOuter(outerPath, innerPath)
 		if err != nil {
-			outputError(err.Error())
+			outputFail(ErrCodeInternal, err.Error(), nil)
 		}
 		return name, version, pageID, conn
 	}
@@ -129,19 +132,19 @@ func resolvePageContext(args []string, flagPage, flagAlias, flagRoll, cwd string
 	if flagRoll != "" {
 		pageID, err := store.GetDefaultPage(flagRoll)
 		if err != nil {
-			outputError(err.Error())
+			outputFail(ErrCodeInternal, err.Error(), nil)
 		}
 		if pageID == "" {
 			outputError(fmt.Sprintf("no default page for iroll '%s'", flagRoll))
 		}
 		_, version, outerPath, err := store.LookupPageByID(pageID)
 		if err != nil {
-			outputError(err.Error())
+			outputFail(ErrCodeInternal, err.Error(), nil)
 		}
 		innerPath := checkedInnerPath(flagRoll, version)
 		conn, err := db.OpenOuter(outerPath, innerPath)
 		if err != nil {
-			outputError(err.Error())
+			outputFail(ErrCodeInternal, err.Error(), nil)
 		}
 		return flagRoll, version, pageID, conn
 	}
@@ -150,11 +153,11 @@ func resolvePageContext(args []string, flagPage, flagAlias, flagRoll, cwd string
 	if len(args) > 0 {
 		name, version, err := builder.ParseTag(args[0])
 		if err != nil {
-			outputError(err.Error())
+			outputFail(ErrCodeInternal, err.Error(), nil)
 		}
 		pageID, err := store.GetDefaultPage(name)
 		if err != nil {
-			outputError(err.Error())
+			outputFail(ErrCodeInternal, err.Error(), nil)
 		}
 		if pageID == "" {
 			errorMsg := fmt.Sprintf("no default page for iroll '%s', run 'logos page default <page-id>' or 'logos page new %s .'", name, name)
@@ -162,12 +165,12 @@ func resolvePageContext(args []string, flagPage, flagAlias, flagRoll, cwd string
 		}
 		_, _, outerPath, err := store.LookupPageByID(pageID)
 		if err != nil {
-			outputError(err.Error())
+			outputFail(ErrCodeInternal, err.Error(), nil)
 		}
 		innerPath := checkedInnerPath(name, version)
 		conn, err := db.OpenOuter(outerPath, innerPath)
 		if err != nil {
-			outputError(err.Error())
+			outputFail(ErrCodeInternal, err.Error(), nil)
 		}
 		return name, version, pageID, conn
 	}
