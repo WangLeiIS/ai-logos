@@ -18,30 +18,6 @@ var pageCmd = &cobra.Command{
 	Short: "Manage pages",
 }
 
-var pageCurrentCwd string
-
-var pageCurrentCmd = &cobra.Command{
-	Use:   "current",
-	Short: "Show current active page",
-	Run: func(cmd *cobra.Command, args []string) {
-		cwd, _ := filepath.Abs(pageCurrentCwd)
-		conn, irollName, _, pageID := openOuterFromActive(cwd)
-		defer conn.Close()
-
-		p, err := db.GetPageByPageID(conn, pageID)
-		if err != nil {
-			outputError(err.Error())
-		}
-
-		outputJSON(map[string]interface{}{
-			"iroll_name": irollName,
-			"page_id":    pageID,
-			"cwd":        p.Cwd,
-			"context":    p.Context,
-			"updated_at": p.UpdatedAt,
-		})
-	},
-}
 
 var pageListCwd string
 var pageListAll bool
@@ -59,27 +35,42 @@ var pageListCmd = &cobra.Command{
 			}
 			pages, err := store.ListAllPages(cwd)
 			if err != nil {
-				outputError(err.Error())
+				outputFail(ErrCodeInternal, err.Error(), nil)
 			}
 			if pages == nil {
 				pages = []map[string]interface{}{}
 			}
-			outputJSON(pages)
+			hints := []Hint{}
+			if len(pages) > 0 {
+				if pid, ok := pages[0]["page_id"].(string); ok {
+					hints = append(hints, Hint{
+						Action: "Get the full context for the first page listed",
+						Cmd:    fmt.Sprintf("logos page get-context --page %s", pid),
+					})
+				}
+			}
+			hints = append(hints, Hint{
+				Action: "Create a new page for a fresh context",
+				Cmd: "logos page new <iroll-name>",
+			})
+			outputOK(pages, hints)
 			return
 		}
 
 		name, version, err := builder.ParseTag(args[0])
 		if err != nil {
-			outputError(fmt.Sprintf("invalid tag: %v", err))
+			outputFail(ErrCodeInvalidTag, fmt.Sprintf("invalid tag: %v", err), []Hint{
+				{Action: "List all available iroll packages", Cmd: "logos status --list"},
+			})
 		}
 		innerPath := checkedInnerPath(name, version)
 		outerPath, err := store.WorkspaceOuterDbPath(name, version)
 		if err != nil {
-			outputError(err.Error())
+			outputFail(ErrCodeInternal, err.Error(), nil)
 		}
 		conn, err := db.OpenOuter(outerPath, innerPath)
 		if err != nil {
-			outputError(err.Error())
+			outputFail(ErrCodeDBOpen, err.Error(), nil)
 		}
 		defer conn.Close()
 
@@ -89,13 +80,30 @@ var pageListCmd = &cobra.Command{
 		}
 		pages, err := db.ListPagesByCwd(conn, listCwd)
 		if err != nil {
-			outputError(err.Error())
+			outputFail(ErrCodeInternal, err.Error(), nil)
 		}
 
-		if pages == nil {
-			pages = []db.Page{}
+		briefs := make([]db.PageBrief, 0, len(pages))
+		for _, p := range pages {
+			briefs = append(briefs, db.PageBrief{
+				PageID:    p.PageID,
+				Cwd:       p.Cwd,
+				Alias:     p.Alias,
+				CreatedAt: p.CreatedAt,
+			})
 		}
-		outputJSON(pages)
+		hints := []Hint{}
+		if len(briefs) > 0 {
+			hints = append(hints, Hint{
+				Action: "Get the full context for the first page listed",
+				Cmd:    fmt.Sprintf("logos page get-context --page %s", briefs[0].PageID),
+			})
+		}
+		hints = append(hints, Hint{
+			Action: "Create a new page for a fresh context",
+			Cmd: fmt.Sprintf("logos page new %s", args[0]),
+		})
+		outputOK(briefs, hints)
 	},
 }
 
@@ -175,13 +183,14 @@ var pageSwitchCmd = &cobra.Command{
 		pageID := args[0]
 		irollName, _, err := store.SwitchPage(pageID)
 		if err != nil {
-			outputError(err.Error())
+			outputFail(ErrCodePageNotFound, err.Error(), nil)
 		}
-
-		outputJSON(map[string]string{
+		outputOK(map[string]string{
 			"active":     "true",
 			"iroll_name": irollName,
 			"page_id":    pageID,
+		}, []Hint{
+			{Action: "Get the full context of the newly active page", Cmd: fmt.Sprintf("logos page get-context --page %s", pageID)},
 		})
 	},
 }
@@ -193,12 +202,14 @@ var pageDeleteCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		pageID := args[0]
 		if err := store.DeletePage(pageID); err != nil {
-			outputError(err.Error())
+			outputFail(ErrCodeInternal, err.Error(), nil)
 		}
-
-		outputJSON(map[string]string{
+		outputOK(map[string]string{
 			"deleted": "true",
 			"page_id": pageID,
+		}, []Hint{
+			{Action: "List remaining pages", Cmd: "logos page list -a"},
+			{Action: "Create a new page for a fresh context", Cmd: "logos page new <iroll-name>"},
 		})
 	},
 }
@@ -217,14 +228,16 @@ var pageDefaultCmd = &cobra.Command{
 			// Look up the iroll name for this page
 			name, _, _, err := store.LookupPageByID(pageID)
 			if err != nil {
-				outputError(err.Error())
+				outputFail(ErrCodePageNotFound, err.Error(), nil)
 			}
 			if err := store.SetDefaultPage(name, pageID); err != nil {
-				outputError(err.Error())
+				outputFail(ErrCodeInternal, err.Error(), nil)
 			}
-			outputJSON(map[string]string{
+			outputOK(map[string]string{
 				"status":  "ok",
 				"message": fmt.Sprintf("default page for '%s' set to %s", name, pageID),
+			}, []Hint{
+				{Action: "Get the full context of the new default page", Cmd: fmt.Sprintf("logos page get-context --page %s", pageID)},
 			})
 			return
 		}
@@ -232,11 +245,13 @@ var pageDefaultCmd = &cobra.Command{
 		// Show or clear
 		if pageDefaultClear && pageDefaultRoll != "" {
 			if err := store.ClearDefaultPage(pageDefaultRoll); err != nil {
-				outputError(err.Error())
+				outputFail(ErrCodeInternal, err.Error(), nil)
 			}
-			outputJSON(map[string]string{
+			outputOK(map[string]string{
 				"status":  "ok",
 				"message": fmt.Sprintf("default page for '%s' cleared", pageDefaultRoll),
+			}, []Hint{
+				{Action: "Set a new default page", Cmd: "logos page default <page-id>"},
 			})
 			return
 		}
@@ -244,23 +259,29 @@ var pageDefaultCmd = &cobra.Command{
 		if pageDefaultRoll != "" {
 			pageID, err := store.GetDefaultPage(pageDefaultRoll)
 			if err != nil {
-				outputError(err.Error())
+				outputFail(ErrCodeInternal, err.Error(), nil)
 			}
 			if pageID == "" {
-				outputJSON(map[string]string{
+				outputOK(map[string]string{
 					"iroll":        pageDefaultRoll,
 					"default_page": "",
+				}, []Hint{
+					{Action: "Create a new page and auto-set it as default", Cmd: fmt.Sprintf("logos page new %s", pageDefaultRoll)},
+					{Action: "List all pages to find one to set as default", Cmd: "logos page list -a"},
 				})
 				return
 			}
-			outputJSON(map[string]string{
+			outputOK(map[string]string{
 				"iroll":        pageDefaultRoll,
 				"default_page": pageID,
+			}, []Hint{
+				{Action: "Get the full context of the default page", Cmd: fmt.Sprintf("logos page get-context --page %s", pageID)},
+				{Action: "Clear the default page setting", Cmd: fmt.Sprintf("logos page default --roll %s --clear", pageDefaultRoll)},
 			})
 			return
 		}
 
-		outputError("usage: logos page default <page-id>  OR  logos page default --roll <name> [--clear]")
+		outputFail(ErrCodeInternal, "usage: logos page default <page-id>  OR  logos page default --roll <name> [--clear]", nil)
 	},
 }
 
@@ -338,15 +359,12 @@ func init() {
 	pageListCmd.Flags().StringVar(&pageListCwd, "cwd", ".", "Working directory to filter by")
 	pageListCmd.Flags().BoolVarP(&pageListAll, "all", "a", false, "List all pages across all directories")
 	pageNewCmd.Flags().StringVar(&pageNewCwd, "cwd", "", "Working directory for the page")
-	pageCurrentCmd.Flags().StringVar(&pageCurrentCwd, "cwd", ".", "Working directory")
-
 	pageDefaultCmd.Flags().StringVar(&pageDefaultRoll, "roll", "", "iroll name")
 	pageDefaultCmd.Flags().BoolVar(&pageDefaultClear, "clear", false, "Clear the default page")
 
 	pageCmd.AddCommand(pageListCmd)
 	pageCmd.AddCommand(pageNewCmd)
 	pageCmd.AddCommand(pageSwitchCmd)
-	pageCmd.AddCommand(pageCurrentCmd)
 	pageCmd.AddCommand(pageDeleteCmd)
 	pageCmd.AddCommand(pageDefaultCmd)
 	pageCmd.AddCommand(queryDnaCmd)
