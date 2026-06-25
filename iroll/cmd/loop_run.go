@@ -211,57 +211,76 @@ func newLoopShowCmd(run func(string, int64) error) *cobra.Command {
 func outputLoopRun(cwd, seedName string, parentRunID *int64, plan string) error {
 	run, err := runLoopStart(cwd, seedName, parentRunID, plan)
 	if err != nil {
-		outputError(err.Error())
+		outputFail(ErrCodeInternal, err.Error(), nil)
 	}
-	outputJSON(run)
+	outputOK(run, []Hint{
+		{Action: "Get the latest loop run details", Cmd: "logos loop ps"},
+		{Action: "Get the page context with active loop focus", Cmd: "logos page get-context"},
+	})
 	return nil
 }
 
 func outputLoopUpdate(cwd string, runID *int64, plan, progress *string) error {
 	run, err := runLoopUpdate(cwd, runID, plan, progress)
 	if err != nil {
-		outputError(err.Error())
+		outputFail(ErrCodeInternal, err.Error(), nil)
 	}
-	outputJSON(run)
+	outputOK(run, []Hint{
+		{Action: "Get the page context with active loop focus", Cmd: "logos page get-context"},
+	})
 	return nil
 }
 
 func outputLoopComplete(cwd string, runID *int64, result string) error {
 	run, err := runLoopComplete(cwd, runID, result)
 	if err != nil {
-		outputError(err.Error())
+		outputFail(ErrCodeInternal, err.Error(), nil)
 	}
-	outputJSON(run)
+	outputOK(run, []Hint{
+		{Action: "Reflect on the completed run", Cmd: fmt.Sprintf("logos loop reflect %d --content <reflection>", run.ID)},
+		{Action: "List all loop runs", Cmd: "logos loop ps -a"},
+		{Action: "Start a new loop run", Cmd: "logos loop run <seed-name>"},
+	})
 	return nil
 }
 
 func outputLoopAbort(cwd string, runID *int64, reason, result string) error {
 	run, err := runLoopAbort(cwd, runID, reason, result)
 	if err != nil {
-		outputError(err.Error())
+		outputFail(ErrCodeInternal, err.Error(), nil)
 	}
-	outputJSON(run)
+	outputOK(run, []Hint{
+		{Action: "Reflect on the aborted run", Cmd: fmt.Sprintf("logos loop reflect %d --content <reflection>", run.ID)},
+		{Action: "Start a new loop run with a different seed", Cmd: "logos loop run <seed-name>"},
+		{Action: "List all loop seeds", Cmd: "logos loop list"},
+	})
 	return nil
 }
 
 func outputLoopReflect(cwd string, runID int64, content string) error {
 	run, err := runLoopReflect(cwd, runID, content)
 	if err != nil {
-		outputError(err.Error())
+		outputFail(ErrCodeInternal, err.Error(), nil)
 	}
-	outputJSON(run)
+	outputOK(run, []Hint{
+		{Action: "View run history for this seed", Cmd: "logos loop history <seed-name>"},
+		{Action: "List all loop runs", Cmd: "logos loop ps -a"},
+	})
 	return nil
 }
 
 func outputLoopPs(cwd string, all bool) error {
 	runs, err := runLoopPs(cwd, all)
 	if err != nil {
-		outputError(err.Error())
+		outputFail(ErrCodeInternal, err.Error(), nil)
 	}
 	if runs == nil {
 		runs = []db.LoopRun{}
 	}
-	outputJSON(runs)
+	outputOK(runs, []Hint{
+		{Action: "Start a new loop run from a seed", Cmd: "logos loop run <seed-name>"},
+		{Action: "List available loop seeds", Cmd: "logos loop list"},
+	})
 	return nil
 }
 
@@ -280,18 +299,24 @@ func runLoopPs(cwd string, all bool) ([]db.LoopRun, error) {
 func outputLoopHistory(cwd, seedName, pageID string, limit int) error {
 	runs, err := runLoopHistory(cwd, seedName, pageID, limit)
 	if err != nil {
-		outputError(err.Error())
+		outputFail(ErrCodeInternal, err.Error(), nil)
 	}
-	outputJSON(runs)
+	outputOK(runs, []Hint{
+		{Action: "Start a new loop run from this seed", Cmd: fmt.Sprintf("logos loop run %s", seedName)},
+		{Action: "Inspect the loop seed", Cmd: fmt.Sprintf("logos loop inspect %s", seedName)},
+	})
 	return nil
 }
 
 func outputLoopShow(cwd string, runID int64) error {
 	run, err := runLoopShow(cwd, runID)
 	if err != nil {
-		outputError(err.Error())
+		outputFail(ErrCodeInternal, err.Error(), nil)
 	}
-	outputJSON(run)
+	outputOK(run, []Hint{
+		{Action: "Update this run's plan or progress", Cmd: fmt.Sprintf("logos loop update %d --plan <json>", runID)},
+		{Action: "Complete this run with a result", Cmd: fmt.Sprintf("logos loop complete %d --result <json>", runID)},
+	})
 	return nil
 }
 
