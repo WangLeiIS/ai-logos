@@ -35,7 +35,7 @@ var getContextCmd = &cobra.Command{
 
 		p, err := db.GetPageByPageID(conn, pageID)
 		if err != nil {
-			outputFail(ErrCodeInternal, err.Error(), nil)
+			outputFail(ErrCodePageNotFound, err.Error(), nil)
 		}
 
 		p.Context, err = db.ResolveContext(p.Context, checkedIrollPath(name, version), conn, p.PageID)
@@ -43,8 +43,8 @@ var getContextCmd = &cobra.Command{
 			outputFail(ErrCodeInternal, err.Error(), nil)
 		}
 
-		hints := []Hint{{Action: "Get the full context including DNA, loops and system prompt", Cmd: fmt.Sprintf("logos page get-context --alias %s", p.Alias)}}
-			outputOK(p, hints)
+		hints := getContextHints(p)
+		outputOK(p, hints)
 	},
 }
 
@@ -81,8 +81,7 @@ var updateContextCmd = &cobra.Command{
 			if err != nil {
 				outputFail(ErrCodeInternal, err.Error(), nil)
 			}
-			hints := []Hint{{Action: "Get the full context including DNA, loops and system prompt", Cmd: fmt.Sprintf("logos page get-context --page %s", p.PageID)}}
-			outputOK(p, hints)
+			outputOK(p, getContextHints(p))
 			return
 		}
 
@@ -91,9 +90,29 @@ var updateContextCmd = &cobra.Command{
 		if err != nil {
 			outputFail(ErrCodeInternal, err.Error(), nil)
 		}
-		hints := []Hint{{Action: "Get the full context including DNA, loops and system prompt", Cmd: fmt.Sprintf("logos page get-context --alias %s", p.Alias)}}
-			outputOK(p, hints)
+		outputOK(p, getContextHints(p))
 	},
+}
+
+// getContextHints returns hints suggesting the agent get the full context.
+func getContextHints(p *db.Page) []Hint {
+	hints := make([]Hint, 0, 2)
+
+	// If alias is set, suggest --alias lookup
+	if p.Alias != "" {
+		hints = append(hints, Hint{
+			Action: "Get the full context including DNA, loops and system prompt",
+			Cmd:    fmt.Sprintf("logos page get-context --alias %s", p.Alias),
+		})
+	}
+
+	// Always suggest --page lookup as fallback
+	hints = append(hints, Hint{
+		Action: "Get the full context including DNA, loops and system prompt",
+		Cmd:    fmt.Sprintf("logos page get-context --page %s", p.PageID),
+	})
+
+	return hints
 }
 
 // resolvePageContext resolves args/flags into a db connection with attached inner db.
@@ -104,12 +123,12 @@ func resolvePageContext(args []string, flagPage, flagAlias, flagRoll, cwd string
 	if flagPage != "" {
 		name, version, outerPath, err := store.LookupPageByID(flagPage)
 		if err != nil {
-			outputFail(ErrCodeInternal, err.Error(), nil)
+			outputFail(ErrCodePageNotFound, fmt.Sprintf("page %s not found: %v", flagPage, err), nil)
 		}
 		innerPath := checkedInnerPath(name, version)
 		conn, err := db.OpenOuter(outerPath, innerPath)
 		if err != nil {
-			outputFail(ErrCodeInternal, err.Error(), nil)
+			outputFail(ErrCodeDBOpen, err.Error(), nil)
 		}
 		return name, version, flagPage, conn
 	}
@@ -118,12 +137,12 @@ func resolvePageContext(args []string, flagPage, flagAlias, flagRoll, cwd string
 	if flagAlias != "" {
 		name, version, pageID, outerPath, err := store.LookupPageByAlias(flagAlias)
 		if err != nil {
-			outputFail(ErrCodeInternal, err.Error(), nil)
+			outputFail(ErrCodePageNotFound, fmt.Sprintf("alias %s not found: %v", flagAlias, err), nil)
 		}
 		innerPath := checkedInnerPath(name, version)
 		conn, err := db.OpenOuter(outerPath, innerPath)
 		if err != nil {
-			outputFail(ErrCodeInternal, err.Error(), nil)
+			outputFail(ErrCodeDBOpen, err.Error(), nil)
 		}
 		return name, version, pageID, conn
 	}
@@ -135,16 +154,19 @@ func resolvePageContext(args []string, flagPage, flagAlias, flagRoll, cwd string
 			outputFail(ErrCodeInternal, err.Error(), nil)
 		}
 		if pageID == "" {
-			outputError(fmt.Sprintf("no default page for iroll '%s'", flagRoll))
+			outputFail(ErrCodeNoDefaultPage, fmt.Sprintf("no default page for iroll '%s'", flagRoll), []Hint{
+				{Action: "Create a new page for this iroll", Cmd: fmt.Sprintf("logos page new %s", flagRoll)},
+				{Action: "List all pages to find one to set as default", Cmd: "logos page list -a"},
+			})
 		}
 		_, version, outerPath, err := store.LookupPageByID(pageID)
 		if err != nil {
-			outputFail(ErrCodeInternal, err.Error(), nil)
+			outputFail(ErrCodePageNotFound, fmt.Sprintf("default page %s gone: %v", pageID, err), nil)
 		}
 		innerPath := checkedInnerPath(flagRoll, version)
 		conn, err := db.OpenOuter(outerPath, innerPath)
 		if err != nil {
-			outputFail(ErrCodeInternal, err.Error(), nil)
+			outputFail(ErrCodeDBOpen, err.Error(), nil)
 		}
 		return flagRoll, version, pageID, conn
 	}
@@ -153,24 +175,28 @@ func resolvePageContext(args []string, flagPage, flagAlias, flagRoll, cwd string
 	if len(args) > 0 {
 		name, version, err := builder.ParseTag(args[0])
 		if err != nil {
-			outputFail(ErrCodeInternal, err.Error(), nil)
+			outputFail(ErrCodeInvalidTag, fmt.Sprintf("invalid tag: %v", err), []Hint{
+				{Action: "List all available iroll packages", Cmd: "logos status --list"},
+			})
 		}
 		pageID, err := store.GetDefaultPage(name)
 		if err != nil {
 			outputFail(ErrCodeInternal, err.Error(), nil)
 		}
 		if pageID == "" {
-			errorMsg := fmt.Sprintf("no default page for iroll '%s', run 'logos page default <page-id>' or 'logos page new %s .'", name, name)
-			outputError(errorMsg)
+			outputFail(ErrCodeNoDefaultPage, fmt.Sprintf("no default page for iroll '%s'", name), []Hint{
+				{Action: "Create a new page and auto-set it as default", Cmd: fmt.Sprintf("logos page new %s", name)},
+				{Action: "List all pages to find one to set as default", Cmd: "logos page list -a"},
+			})
 		}
 		_, _, outerPath, err := store.LookupPageByID(pageID)
 		if err != nil {
-			outputFail(ErrCodeInternal, err.Error(), nil)
+			outputFail(ErrCodePageNotFound, fmt.Sprintf("default page %s gone: %v", pageID, err), nil)
 		}
 		innerPath := checkedInnerPath(name, version)
 		conn, err := db.OpenOuter(outerPath, innerPath)
 		if err != nil {
-			outputFail(ErrCodeInternal, err.Error(), nil)
+			outputFail(ErrCodeDBOpen, err.Error(), nil)
 		}
 		return name, version, pageID, conn
 	}
