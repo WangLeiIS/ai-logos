@@ -26,6 +26,7 @@ const (
 	ErrCodePageNotFound  = "page_not_found"
 	ErrCodeDBOpen        = "db_open_failed"
 	ErrCodeInternal      = "internal"
+	ErrCodeNoActivePage  = "no_active_page"
 )
 
 func jsonLine(v interface{}) string {
@@ -95,7 +96,7 @@ func outputError(msg string) {
 func checkedIrollPath(name string, version string) string {
 	path, err := store.IrollPath(name, version)
 	if err != nil {
-		outputError(err.Error())
+		outputFail(ErrCodeInternal, err.Error(), nil)
 	}
 	return path
 }
@@ -108,7 +109,7 @@ func checkedDbPath(name string, version string) string {
 func checkedInnerPath(name, version string) string {
 	path, err := store.InnerDbPath(name, version)
 	if err != nil {
-		outputError(err.Error())
+		outputFail(ErrCodeInternal, err.Error(), nil)
 	}
 	return path
 }
@@ -118,12 +119,15 @@ func checkedInnerPath(name, version string) string {
 func openOuterFromActive(cwd string) (*sql.DB, string, string, string) {
 	irollName, irollVersion, pageID, outerDbPath, err := store.GetActive(cwd)
 	if err != nil {
-		outputError(err.Error())
+		outputFail(ErrCodeNoActivePage, err.Error(), []Hint{
+			{Action: "Create a new page and auto-set it as the active page for this directory", Cmd: "logos page new <iroll-name>"},
+			{Action: "List all pages to find an existing one", Cmd: "logos page list -a"},
+		})
 	}
 	innerPath := checkedInnerPath(irollName, irollVersion)
 	conn, err := db.OpenOuter(outerDbPath, innerPath)
 	if err != nil {
-		outputError(err.Error())
+		outputFail(ErrCodeDBOpen, err.Error(), nil)
 	}
 	return conn, irollName, irollVersion, pageID
 }
