@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"path/filepath"
 
 	"logos/db"
@@ -24,13 +25,25 @@ var queryDnaCmd = &cobra.Command{
 
 		results, err := db.QueryDna(conn, name, queryDnaType)
 		if err != nil {
-			outputError(err.Error())
+			outputFail(ErrCodeInternal, err.Error(), nil)
 		}
 
 		if results == nil {
 			results = []db.Dna{}
 		}
-		outputJSON(results)
+
+		hints := []Hint{}
+		if len(results) > 0 {
+			hints = append(hints, Hint{
+				Action: "Use a DNA answer in your page context",
+				Cmd:    fmt.Sprintf("logos page update-context --page <page-id> --content '{\"dna_answer\":\"%s\"}'", results[0].Answer),
+			})
+		}
+		hints = append(hints, Hint{
+			Action: "Get the full page context including DNA",
+			Cmd:    "logos page get-context",
+		})
+		outputOK(results, hints)
 	},
 }
 
