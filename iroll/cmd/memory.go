@@ -39,14 +39,18 @@ var queryMemoryCmd = &cobra.Command{
 
 		results, err := db.QueryMemory(conn, pageID, params)
 		if err != nil {
-			outputError(err.Error())
+			outputFail(ErrCodeInternal, err.Error(), nil)
 		}
 
 		if queryMemoryFull {
 			if results == nil {
 				results = []db.Memory{}
 			}
-			outputJSON(results)
+			hints := []Hint{
+				{Action: "Get the full page context", Cmd: "logos page get-context"},
+				{Action: "Query memory with a different keyword", Cmd: "logos page query-memory --keyword <keyword>"},
+			}
+			outputOK(results, hints)
 		} else {
 			summaries := make([]db.MemorySummary, len(results))
 			for i, m := range results {
@@ -60,7 +64,11 @@ var queryMemoryCmd = &cobra.Command{
 			if summaries == nil {
 				summaries = []db.MemorySummary{}
 			}
-			outputJSON(summaries)
+			hints := []Hint{
+				{Action: "Get the full page context", Cmd: "logos page get-context"},
+				{Action: "Query memory with a keyword for full content", Cmd: "logos page query-memory --keyword <keyword> --full"},
+			}
+			outputOK(summaries, hints)
 		}
 	},
 }
