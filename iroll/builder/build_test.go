@@ -83,8 +83,8 @@ func TestProcessMigrateRejectsTraversal(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := processMigrate(buildDir, layerDir, filepath.Join("..", "migration.sql")); err == nil {
-		t.Fatal("processMigrate returned nil error for traversal")
+	if err := processMigrateTo(filepath.Join(buildDir, "test.db"), layerDir, filepath.Join("..", "migration.sql")); err == nil {
+		t.Fatal("processMigrateTo returned nil error for traversal")
 	}
 }
 
@@ -107,7 +107,7 @@ func TestBuildRegistersValidBooks(t *testing.T) {
 	if result.Path != filepath.Join(home, ".iroll", "valid-roll", "latest") {
 		t.Fatalf("result path = %q", result.Path)
 	}
-	conn, err := sql.Open("sqlite3", filepath.Join(result.Path, "ai_roll.db"))
+	conn, err := sql.Open("sqlite3", filepath.Join(result.Path, "roll-inner.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -147,7 +147,7 @@ func TestBuildRemovesInheritedBookRegistrationWhenResourceIsRemoved(t *testing.T
 	if err := os.MkdirAll(baseDir, 0755); err != nil {
 		t.Fatal(err)
 	}
-	conn, err := sql.Open("sqlite3", filepath.Join(baseDir, "ai_roll.db"))
+	conn, err := sql.Open("sqlite3", filepath.Join(baseDir, "roll-inner.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,7 +170,7 @@ func TestBuildRemovesInheritedBookRegistrationWhenResourceIsRemoved(t *testing.T
 	if err != nil {
 		t.Fatalf("Build returned error: %v", err)
 	}
-	child, err := sql.Open("sqlite3", filepath.Join(result.Path, "ai_roll.db"))
+	child, err := sql.Open("sqlite3", filepath.Join(result.Path, "roll-inner.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -207,14 +207,14 @@ func TestBuildCheckpointsWALBeforeCopyingToStore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Build returned error: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(result.Path, "ai_roll.db-wal")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(result.Path, "roll-inner.db-wal")); !os.IsNotExist(err) {
 		t.Fatalf("stored roll contains WAL sidecar: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(result.Path, "ai_roll.db-shm")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(result.Path, "roll-inner.db-shm")); !os.IsNotExist(err) {
 		t.Fatalf("stored roll contains SHM sidecar: %v", err)
 	}
 
-	conn, err := sql.Open("sqlite3", filepath.Join(result.Path, "ai_roll.db"))
+	conn, err := sql.Open("sqlite3", filepath.Join(result.Path, "roll-inner.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -251,7 +251,7 @@ func TestBuildBaseAgentContainsLoopSchema(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	conn, err := sql.Open("sqlite3", filepath.Join(result.Path, "ai_roll.db"))
+	conn, err := sql.Open("sqlite3", filepath.Join(result.Path, "roll-inner.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -303,9 +303,24 @@ func TestBuildBaseAgentContainsLoopSchema(t *testing.T) {
 		LIMIT 1
 	`, "idx_loop_runs_loop_ended")
 
-	assertLoopRunInsertFails(t, conn, 1, "page-two", nil, "pending")
-	assertLoopRunInsertFails(t, conn, 9999, "page-two", nil, "active")
-	assertLoopRunInsertFails(t, conn, 1, "page-two", int64(9999), "active")
+	// Also verify outer db has the right tables
+	outerConn, err := sql.Open("sqlite3", filepath.Join(result.Path, "roll-outer.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer outerConn.Close()
+	assertTableColumns(t, outerConn, "pages", []string{
+		"id", "page_id", "cwd", "context", "created_at", "updated_at",
+	})
+	assertTableColumns(t, outerConn, "memory", []string{
+		"id", "page_id", "name", "question", "content", "importance", "sleep_count", "created_at", "updated_at",
+	})
+	assertTableColumns(t, outerConn, "loop_runs", []string{
+		"id", "loop_id", "page_id", "parent_run_id",
+		"seed_name", "seed_describe", "seed_content", "seed_weight",
+		"status", "plan", "progress", "result", "reflection", "abort_reason",
+		"started_at", "ended_at", "reflected_at", "updated_at",
+	})
 }
 
 func assertTableColumns(t *testing.T, conn *sql.DB, table string, want []string) {

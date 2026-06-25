@@ -52,6 +52,9 @@ func Build(lf *Irollfile, name string, version string) (*BuildResult, error) {
 
 	var parentLayerID string
 
+	innerPath := filepath.Join(tmpDir, "roll-inner.db")
+	outerPath := filepath.Join(tmpDir, "roll-outer.db")
+
 	for _, inst := range lf.Instructions {
 		switch inst.Type {
 		case InstFrom:
@@ -61,7 +64,13 @@ func Build(lf *Irollfile, name string, version string) (*BuildResult, error) {
 			}
 
 		case InstMigrate:
-			err = processMigrate(tmpDir, lf.Dir, inst.Args[0])
+			err = processMigrateTo(innerPath, lf.Dir, inst.Args[0])
+			if err != nil {
+				return nil, err
+			}
+
+		case InstMigrateOuter:
+			err = processMigrateTo(outerPath, lf.Dir, inst.Args[0])
 			if err != nil {
 				return nil, err
 			}
@@ -74,12 +83,11 @@ func Build(lf *Irollfile, name string, version string) (*BuildResult, error) {
 		}
 	}
 
-	dbPath := filepath.Join(tmpDir, "ai_roll.db")
 	bundles, err := book.Discover(tmpDir)
 	if err != nil {
 		return nil, fmt.Errorf("validate books: %w", err)
 	}
-	conn, err := sql.Open("sqlite3", dbPath)
+	conn, err := sql.Open("sqlite3", innerPath)
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +121,7 @@ func Build(lf *Irollfile, name string, version string) (*BuildResult, error) {
 		Parent:        parentLayerID,
 		Description:   fmt.Sprintf("build from Irollfile for %s:%s", name, version),
 		CreatedAt:     now,
-		SchemaVersion: 1,
+		SchemaVersion: 2,
 	}
 	ljBytes, _ := json.MarshalIndent(lj, "", "  ")
 	if err := os.WriteFile(filepath.Join(tmpDir, "layer.json"), ljBytes, 0644); err != nil {
@@ -121,7 +129,7 @@ func Build(lf *Irollfile, name string, version string) (*BuildResult, error) {
 	}
 
 	// Record history
-	conn, err = sql.Open("sqlite3", dbPath)
+	conn, err = sql.Open("sqlite3", innerPath)
 	if err != nil {
 		return nil, err
 	}
@@ -235,7 +243,7 @@ func processFrom(tmpDir string, baseTag string) (string, error) {
 	return "", nil
 }
 
-func processMigrate(tmpDir string, lfDir string, sqlFile string) error {
+func processMigrateTo(dbPath string, lfDir string, sqlFile string) error {
 	sqlPath, err := safepath.Join(lfDir, sqlFile)
 	if err != nil {
 		return err
@@ -244,7 +252,6 @@ func processMigrate(tmpDir string, lfDir string, sqlFile string) error {
 		return fmt.Errorf("sql file not found: %s", sqlPath)
 	}
 
-	dbPath := filepath.Join(tmpDir, "ai_roll.db")
 	conn, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		return err

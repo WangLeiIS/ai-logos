@@ -14,6 +14,7 @@ const (
 	InstFrom InstructionType = iota
 	InstMigrate
 	InstCopy
+	InstMigrateOuter
 )
 
 type Instruction struct {
@@ -61,10 +62,13 @@ func ParseIrollfile(path string) (*Irollfile, error) {
 			lf.Instructions = append(lf.Instructions, Instruction{Type: InstFrom, Args: []string{parts[1]}})
 
 		case "MIGRATE":
-			if len(parts) != 2 {
-				return nil, fmt.Errorf("line %d: MIGRATE requires exactly 1 argument", lineNum)
+			if len(parts) == 3 && strings.ToUpper(parts[1]) == "OUTER" {
+				lf.Instructions = append(lf.Instructions, Instruction{Type: InstMigrateOuter, Args: []string{parts[2]}})
+			} else if len(parts) == 2 {
+				lf.Instructions = append(lf.Instructions, Instruction{Type: InstMigrate, Args: []string{parts[1]}})
+			} else {
+				return nil, fmt.Errorf("line %d: MIGRATE requires 1 argument (or MIGRATE OUTER <file>)", lineNum)
 			}
-			lf.Instructions = append(lf.Instructions, Instruction{Type: InstMigrate, Args: []string{parts[1]}})
 
 		case "COPY":
 			if len(parts) != 3 {
