@@ -15,7 +15,7 @@ Logos is an AI agent state and knowledge management system. It provides a standa
 ```bash
 # Build the CLI (with version injection)
 cd iroll
-go build -ldflags "-X logos/cmd.Version=0.1.1" -o ../logos .
+go build -ldflags "-X logos/cmd.Version=0.2.0" -o ../logos .
 
 # Install to PATH (overwrites old version)
 cp ../logos ~/.local/bin/logos
