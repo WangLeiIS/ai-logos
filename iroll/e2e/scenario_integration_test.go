@@ -239,9 +239,10 @@ func TestLoopSeedAndRunWithMemory(t *testing.T) {
 		t.Fatalf("Build returned error: %v", err)
 	}
 
-	conn, err := env.DB("loop-mem-test")
+	cwd := t.TempDir()
+	conn, err := env.OpenWorkspace("loop-mem-test", "latest", cwd)
 	if err != nil {
-		t.Fatalf("env.DB returned error: %v", err)
+		t.Fatalf("OpenWorkspace returned error: %v", err)
 	}
 
 	// Insert a loop seed.
@@ -368,9 +369,10 @@ func TestLoopAutoInjectionInContext(t *testing.T) {
 		t.Fatalf("Build returned error: %v", err)
 	}
 
-	conn, err := env.DB("ctx-inject-test")
+	cwd := t.TempDir()
+	conn, err := env.OpenWorkspace("ctx-inject-test", "latest", cwd)
 	if err != nil {
-		t.Fatalf("env.DB returned error: %v", err)
+		t.Fatalf("OpenWorkspace returned error: %v", err)
 	}
 
 	// Insert a loop seed.

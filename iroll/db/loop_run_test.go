@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -769,21 +768,31 @@ func setupLoopRunTest(t *testing.T) *sql.DB {
 
 func setupConcurrentLoopRunTest(t *testing.T) (*sql.DB, *sql.DB) {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "loop.db") + "?_busy_timeout=0"
-	first, err := Open(path)
+	dir := t.TempDir()
+	innerPath, outerPath := setupDualDB(t, dir)
+	outerURI := outerPath + "?_busy_timeout=0"
+
+	// Set up test data using first connection
+	setupConn, err := OpenOuter(outerPath, innerPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	insertLoopTestPage(t, setupConn, "page-a")
+	insertLoopTestPage(t, setupConn, "page-b")
+	if _, err := InsertLoopSeed(setupConn, "review", "normal", "Review memory", "Inspect memories", 0.8); err != nil {
+		t.Fatal(err)
+	}
+	setupConn.Close()
+
+	// Open two independent connections
+	first, err := OpenOuter(outerURI, innerPath)
 	if err != nil {
 		t.Fatal(err)
 	}
 	first.SetMaxOpenConns(1)
 	t.Cleanup(func() { first.Close() })
-	applyLoopTestSchema(t, first)
-	insertLoopTestPage(t, first, "page-a")
-	insertLoopTestPage(t, first, "page-b")
-	if _, err := InsertLoopSeed(first, "review", "normal", "Review memory", "Inspect memories", 0.8); err != nil {
-		t.Fatal(err)
-	}
 
-	second, err := Open(path)
+	second, err := OpenOuter(outerURI, innerPath)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -49,14 +49,14 @@ func EnsureHistoryTable(db *sql.DB) error {
 
 func InsertHistory(db *sql.DB, fromLayer string, description string, layerID string, instructions string) error {
 	_, err := db.Exec(
-		"INSERT INTO inner.history (from_layer, description, layer_id, instructions, created_at) VALUES (?, ?, ?, ?, ?)",
+		"INSERT INTO history (from_layer, description, layer_id, instructions, created_at) VALUES (?, ?, ?, ?, ?)",
 		fromLayer, description, layerID, instructions, time.Now().UTC().Format(time.RFC3339Nano),
 	)
 	return err
 }
 
 func QueryHistory(db *sql.DB) ([]HistoryEntry, error) {
-	rows, err := db.Query("SELECT id, from_layer, description, layer_id, instructions, created_at FROM inner.history ORDER BY id")
+	rows, err := db.Query("SELECT id, from_layer, description, layer_id, instructions, created_at FROM history ORDER BY id")
 	if err != nil {
 		return nil, err
 	}
@@ -100,7 +100,7 @@ func QueryTableStats(db *sql.DB) (map[string]int, error) {
 }
 
 func QueryAllMetadata(db *sql.DB) (map[string]string, error) {
-	rows, err := db.Query("SELECT key, value FROM inner.metadata")
+	rows, err := db.Query("SELECT key, value FROM metadata")
 	if err != nil {
 		return nil, err
 	}

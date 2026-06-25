@@ -179,8 +179,8 @@ func DeletePage(pageID string) error {
 	defer sdb.Close()
 
 	// Check it exists
-	var irollName, irollVersion string
-	err = sdb.QueryRow("SELECT iroll_name, iroll_version FROM page_index WHERE page_id = ?", pageID).Scan(&irollName, &irollVersion)
+	var irollName, irollVersion, outerDbPath string
+	err = sdb.QueryRow("SELECT iroll_name, iroll_version, outer_db_path FROM page_index WHERE page_id = ?", pageID).Scan(&irollName, &irollVersion, &outerDbPath)
 	if err == sql.ErrNoRows {
 		return fmt.Errorf("page '%s' not found in index", pageID)
 	}
@@ -188,11 +188,17 @@ func DeletePage(pageID string) error {
 		return err
 	}
 
-	dbPath, err := DbPath(irollName, irollVersion)
+	innerPath, err := InnerDbPath(irollName, irollVersion)
 	if err != nil {
 		return err
 	}
-	conn, err := rolldb.Open(dbPath)
+	var conn *sql.DB
+	if outerDbPath == "" {
+		// Fall back to opening inner DB directly for legacy entries without outer path
+		conn, err = rolldb.Open(innerPath)
+	} else {
+		conn, err = rolldb.OpenOuter(outerDbPath, innerPath)
+	}
 	if err != nil {
 		return err
 	}

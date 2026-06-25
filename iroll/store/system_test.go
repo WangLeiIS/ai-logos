@@ -11,7 +11,7 @@ import (
 )
 
 func TestDeletePageCleansRollBeforeIndexAndClearsActiveMapping(t *testing.T) {
-	conn, pageID, mainID, childID := setupDeletePageStoreTest(t)
+	conn, pageID, mainID, childID, cwd := setupDeletePageStoreTest(t)
 	defer conn.Close()
 
 	if err := DeletePage(pageID); err != nil {
@@ -32,13 +32,13 @@ func TestDeletePageCleansRollBeforeIndexAndClearsActiveMapping(t *testing.T) {
 		}
 	}
 	assertPageIndexCount(t, pageID, 0, 0)
-	if _, _, _, _, err := GetActive("/work"); err == nil {
+	if _, _, _, _, err := GetActive(cwd); err == nil {
 		t.Fatal("active page mapping still exists")
 	}
 }
 
 func TestDeletePageLeavesIndexIntactWhenRollCleanupFails(t *testing.T) {
-	conn, pageID, mainID, childID := setupDeletePageStoreTest(t)
+	conn, pageID, mainID, childID, cwd := setupDeletePageStoreTest(t)
 	defer conn.Close()
 	if _, err := conn.Exec(`
 		CREATE TRIGGER reject_page_delete
@@ -55,7 +55,7 @@ func TestDeletePageLeavesIndexIntactWhenRollCleanupFails(t *testing.T) {
 	}
 
 	assertPageIndexCount(t, pageID, 1, 1)
-	name, _, activePageID, _, err := GetActive("/work")
+	name, _, activePageID, _, err := GetActive(cwd)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +74,7 @@ func TestDeletePageLeavesIndexIntactWhenRollCleanupFails(t *testing.T) {
 }
 
 func TestDeletePageRollsBackSystemIndexDeletesTogether(t *testing.T) {
-	conn, pageID, _, _ := setupDeletePageStoreTest(t)
+	conn, pageID, _, _, _ := setupDeletePageStoreTest(t)
 	conn.Close()
 	sdb, err := OpenSystem()
 	if err != nil {
@@ -98,7 +98,7 @@ func TestDeletePageRollsBackSystemIndexDeletesTogether(t *testing.T) {
 }
 
 func TestDeletePageRetryFinishesIndexCleanupAfterSystemFailure(t *testing.T) {
-	conn, pageID, _, _ := setupDeletePageStoreTest(t)
+	conn, pageID, _, _, _ := setupDeletePageStoreTest(t)
 	conn.Close()
 	sdb, err := OpenSystem()
 	if err != nil {
@@ -135,31 +135,69 @@ func TestDeletePageRetryFinishesIndexCleanupAfterSystemFailure(t *testing.T) {
 	assertPageIndexCount(t, pageID, 0, 0)
 }
 
-func setupDeletePageStoreTest(t *testing.T) (*sql.DB, string, int64, int64) {
+func setupDeletePageStoreTest(t *testing.T) (*sql.DB, string, int64, int64, string) {
 	t.Helper()
 	setTestHome(t)
-	dbPath, err := DbPath("test-roll", "latest")
+	testCwd := t.TempDir()
+
+	// Create inner DB with schema and template page
+	innerPath, err := InnerDbPath("test-roll", "latest")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(filepath.Dir(dbPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(innerPath), 0755); err != nil {
 		t.Fatal(err)
 	}
-	conn, err := rolldb.Open(dbPath)
+	innerConn, err := rolldb.Open(innerPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	schema, err := os.ReadFile(filepath.Join("..", "..", "examples", "base-agent", "init_schema.sql"))
+	innerSchema, err := os.ReadFile(filepath.Join("..", "..", "examples", "base-agent", "init_inner.sql"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := conn.Exec(string(schema)); err != nil {
+	if _, err := innerConn.Exec(string(innerSchema)); err != nil {
+		t.Fatal(err)
+	}
+	// Insert template page for InsertPage
+	if _, err := innerConn.Exec(`
+		INSERT INTO pages (page_id, cwd, context, created_at, updated_at)
+		VALUES ('0', '', '{}', datetime('now'), datetime('now'))
+	`); err != nil {
+		t.Fatal(err)
+	}
+	innerConn.Close()
+
+	// Create workspace outer DB in unique temp cwd
+	outerPath, err := CwdOuterDbPath(testCwd, "test-roll")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(outerPath), 0755); err != nil {
+		t.Fatal(err)
+	}
+	outerConn, err := rolldb.Open(outerPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	outerSchema, err := os.ReadFile(filepath.Join("..", "..", "examples", "base-agent", "init_outer.sql"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := outerConn.Exec(string(outerSchema)); err != nil {
+		t.Fatal(err)
+	}
+	outerConn.Close()
+
+	// Open with ATTACH
+	conn, err := rolldb.OpenOuter(outerPath, innerPath)
+	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := rolldb.InsertLoopSeed(conn, "review", "normal", "Review memory", "Inspect memories", 0.8); err != nil {
 		t.Fatal(err)
 	}
-	page, err := rolldb.InsertPage(conn, "/work")
+	page, err := rolldb.InsertPage(conn, testCwd)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -171,10 +209,10 @@ func setupDeletePageStoreTest(t *testing.T) (*sql.DB, string, int64, int64) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := IndexPage("test-roll", "latest", page.PageID, "/work", ""); err != nil {
+	if err := IndexPage("test-roll", "latest", page.PageID, testCwd, outerPath); err != nil {
 		t.Fatal(err)
 	}
-	return conn, page.PageID, main.ID, child.ID
+	return conn, page.PageID, main.ID, child.ID, testCwd
 }
 
 func assertPageIndexCount(t *testing.T, pageID string, wantIndex, wantActive int) {

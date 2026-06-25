@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -18,14 +19,27 @@ func TestLoopEndToEndAcrossIndependentPages(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := builder.Build(layerfile, "loop-e2e", "latest"); err != nil {
-		t.Fatal(err)
-	}
-	dbPath, err := store.DbPath("loop-e2e", "latest")
+	buildResult, err := builder.Build(layerfile, "loop-e2e", "latest")
 	if err != nil {
 		t.Fatal(err)
 	}
-	conn, err := db.Open(dbPath)
+	innerPath, err := store.InnerDbPath("loop-e2e", "latest")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Copy outer template to workspace and open with ATTACH
+	outerPath := filepath.Join(buildResult.Path, "roll-outer.db")
+	workspaceOuter := filepath.Join(t.TempDir(), "loop-e2e.outer.db")
+	outerData, err := os.ReadFile(outerPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(workspaceOuter, outerData, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	conn, err := db.OpenOuter(workspaceOuter, innerPath)
 	if err != nil {
 		t.Fatal(err)
 	}

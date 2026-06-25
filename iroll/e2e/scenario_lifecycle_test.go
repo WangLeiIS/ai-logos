@@ -129,8 +129,8 @@ func TestBuildCreatesValidIroll(t *testing.T) {
 	if err := json.Unmarshal(data, &lj); err != nil {
 		t.Fatalf("parsing layer.json: %v", err)
 	}
-	if lj.SchemaVersion != 1 {
-		t.Fatalf("layer.json schema_version = %d, want 1", lj.SchemaVersion)
+	if lj.SchemaVersion != 2 {
+		t.Fatalf("layer.json schema_version = %d, want 2", lj.SchemaVersion)
 	}
 	if lj.LayerID == "" {
 		t.Fatal("layer.json layer_id is empty")

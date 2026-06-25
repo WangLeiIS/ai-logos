@@ -66,7 +66,7 @@ func TestPageCurrentResolvesActive(t *testing.T) {
 	}
 
 	cwd := filepath.Join(t.TempDir(), "ws")
-	page, err := env.CreatePage("page-test", "latest", "", cwd)
+	page, err := env.CreatePage("page-test", "latest", cwd)
 	if err != nil {
 		t.Fatalf("CreatePage returned error: %v", err)
 	}

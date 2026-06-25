@@ -104,14 +104,16 @@ func TestIsQuery(t *testing.T) {
 
 func openEvolvingTestDB(t *testing.T) *sql.DB {
 	t.Helper()
-	conn, err := Open(":memory:")
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "test.db")
+	conn, err := Open(dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
 	conn.SetMaxOpenConns(1)
 	t.Cleanup(func() { conn.Close() })
 
-	schema, err := os.ReadFile(filepath.Join("..", "..", "examples", "base-agent", "init_schema.sql"))
+	schema, err := os.ReadFile(filepath.Join("..", "..", "examples", "base-agent", "init_inner.sql"))
 	if err != nil {
 		t.Fatal(err)
 	}

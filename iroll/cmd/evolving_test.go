@@ -27,11 +27,12 @@ func setupEvolvingTest(t *testing.T) (string, string) {
 		t.Fatal(err)
 	}
 
-	conn, err := db.Open(filepath.Join(rollRoot, "ai_roll.db"))
+	innerPath := filepath.Join(rollRoot, "roll-inner.db")
+	conn, err := db.Open(innerPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	schema, err := os.ReadFile(filepath.Join("..", "..", "examples", "base-agent", "init_schema.sql"))
+	schema, err := os.ReadFile(filepath.Join("..", "..", "examples", "base-agent", "init_inner.sql"))
 	if err != nil {
 		conn.Close()
 		t.Fatal(err)

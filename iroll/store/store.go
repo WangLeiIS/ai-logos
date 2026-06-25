@@ -205,7 +205,7 @@ func List() ([]string, error) {
 			if !v.IsDir() {
 				continue
 			}
-			dbFile := filepath.Join(rootDir, v.Name(), "ai_roll.db")
+			dbFile := filepath.Join(rootDir, v.Name(), "roll-inner.db")
 			if _, err := os.Stat(dbFile); err == nil {
 				names = append(names, e.Name()+":"+v.Name())
 			}

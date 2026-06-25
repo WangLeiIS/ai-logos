@@ -8,13 +8,14 @@ import (
 
 func openMemoryTestDB(t *testing.T) *sql.DB {
 	t.Helper()
-	conn, err := Open(":memory:")
+	dir := t.TempDir()
+	innerPath, outerPath := setupDualDB(t, dir)
+	conn, err := OpenOuter(outerPath, innerPath)
 	if err != nil {
 		t.Fatal(err)
 	}
 	conn.SetMaxOpenConns(1)
 	t.Cleanup(func() { conn.Close() })
-	applyLoopTestSchema(t, conn)
 	return conn
 }
 

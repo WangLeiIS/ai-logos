@@ -471,32 +471,70 @@ func setupLoopCommandTest(t *testing.T) (string, *sql.DB) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	dbPath, err := store.DbPath("test-roll", "latest")
+
+	// Create inner DB with schema and seed data
+	innerPath, err := store.InnerDbPath("test-roll", "latest")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(filepath.Dir(dbPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(innerPath), 0755); err != nil {
 		t.Fatal(err)
 	}
-	conn, err := db.Open(dbPath)
+	innerConn, err := db.Open(innerPath)
 	if err != nil {
 		t.Fatal(err)
 	}
+	innerSchema, err := os.ReadFile(filepath.Join("..", "..", "examples", "base-agent", "init_inner.sql"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := innerConn.Exec(string(innerSchema)); err != nil {
+		t.Fatal(err)
+	}
+	// Insert template page for InsertPage compatibility
+	if _, err := innerConn.Exec(`
+		INSERT INTO pages (page_id, cwd, context, created_at, updated_at)
+		VALUES ('0', '', '{}', datetime('now'), datetime('now'))
+	`); err != nil {
+		t.Fatal(err)
+	}
+	innerConn.Close()
+
+	// Create workspace outer DB
+	outerPath, err := store.CwdOuterDbPath(absoluteCwd, "test-roll")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(outerPath), 0755); err != nil {
+		t.Fatal(err)
+	}
+	outerConn, err := db.Open(outerPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	outerSchema, err := os.ReadFile(filepath.Join("..", "..", "examples", "base-agent", "init_outer.sql"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := outerConn.Exec(string(outerSchema)); err != nil {
+		t.Fatal(err)
+	}
+	outerConn.Close()
+
+	// Open with ATTACH, insert test page, and index
+	conn, err := db.OpenOuter(outerPath, innerPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn.SetMaxOpenConns(1)
 	t.Cleanup(func() { conn.Close() })
-	schema, err := os.ReadFile(filepath.Join("..", "..", "examples", "base-agent", "init_schema.sql"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := conn.Exec(string(schema)); err != nil {
-		t.Fatal(err)
-	}
 	if _, err := conn.Exec(`
 		INSERT INTO pages (page_id, cwd, context, created_at, updated_at)
-		VALUES ('page-one', ?, '{}', 'now', 'now')
+		VALUES ('page-one', ?, '{}', datetime('now'), datetime('now'))
 	`, absoluteCwd); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.IndexPage("test-roll", "latest", "page-one", absoluteCwd, ""); err != nil {
+	if err := store.IndexPage("test-roll", "latest", "page-one", absoluteCwd, outerPath); err != nil {
 		t.Fatal(err)
 	}
 	return cwd, conn

@@ -105,7 +105,7 @@ func setupBookCommandTest(t *testing.T) (string, string) {
 	if err := os.MkdirAll(rollRoot, 0755); err != nil {
 		t.Fatal(err)
 	}
-	conn, err := db.Open(filepath.Join(rollRoot, "ai_roll.db"))
+	conn, err := db.Open(filepath.Join(rollRoot, "roll-inner.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

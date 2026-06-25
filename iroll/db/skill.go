@@ -47,7 +47,7 @@ func SyncSkills(conn *sql.DB, skills []skill.ValidatedSkill) (err error) {
 		now := nowISO()
 		skillPath := s.ResourcePath + "/skill.md"
 		if _, err = tx.Exec(`
-			INSERT INTO inner.skill (name, description, path, weight, created_at, updated_at)
+			INSERT INTO skill (name, description, path, weight, created_at, updated_at)
 			VALUES (?, ?, ?, 0.5, ?, ?)
 			ON CONFLICT(name) DO UPDATE SET
 				description = excluded.description,
@@ -59,7 +59,7 @@ func SyncSkills(conn *sql.DB, skills []skill.ValidatedSkill) (err error) {
 		present[s.Name] = struct{}{}
 	}
 
-	rows, err := tx.Query("SELECT name FROM inner.skill")
+	rows, err := tx.Query("SELECT name FROM skill")
 	if err != nil {
 		return fmt.Errorf("list registered skills during sync: %w", err)
 	}
@@ -81,7 +81,7 @@ func SyncSkills(conn *sql.DB, skills []skill.ValidatedSkill) (err error) {
 	rows.Close()
 
 	for _, name := range stale {
-		if _, err = tx.Exec("DELETE FROM inner.skill WHERE name = ?", name); err != nil {
+		if _, err = tx.Exec("DELETE FROM skill WHERE name = ?", name); err != nil {
 			return fmt.Errorf("delete stale skill %q: %w", name, err)
 		}
 	}
@@ -94,7 +94,7 @@ func SyncSkills(conn *sql.DB, skills []skill.ValidatedSkill) (err error) {
 func ListSkills(conn *sql.DB) ([]skill.Skill, error) {
 	rows, err := conn.Query(`
 		SELECT id, name, description, path, weight, archived_at, created_at, updated_at
-		FROM inner.skill
+		FROM skill
 		WHERE archived_at IS NULL
 		ORDER BY weight DESC, name
 	`)
@@ -121,7 +121,7 @@ func GetSkill(conn *sql.DB, name string) (*skill.Skill, error) {
 	var s skill.Skill
 	err := conn.QueryRow(`
 		SELECT id, name, description, path, weight, archived_at, created_at, updated_at
-		FROM inner.skill
+		FROM skill
 		WHERE name = ?
 	`, name).Scan(&s.ID, &s.Name, &s.Description, &s.Path, &s.Weight, &s.ArchivedAt, &s.CreatedAt, &s.UpdatedAt)
 	if err == sql.ErrNoRows {

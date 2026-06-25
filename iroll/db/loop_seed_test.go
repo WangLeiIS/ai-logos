@@ -185,11 +185,22 @@ func TestLoopSeedUpdateRejectsEmptyAndInvalidPatch(t *testing.T) {
 }
 
 func TestLoopSeedMutationsReturnTheirOwnUpdatedRow(t *testing.T) {
-	conn := openLoopTestDB(t)
+	dir := t.TempDir()
+	innerPath, outerPath := setupDualDB(t, dir)
+	conn, err := OpenOuter(outerPath, innerPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
 	if _, err := InsertLoopSeed(conn, "review", "normal", "Review", "Review memory", 0.5); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := conn.Exec(`
+	// Create trigger directly on the inner DB (cross-database triggers are not allowed)
+	innerConn, err := Open(innerPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := innerConn.Exec(`
 		CREATE TRIGGER replace_loop_seed_after_update
 		AFTER UPDATE ON loop
 		BEGIN
@@ -202,8 +213,10 @@ func TestLoopSeedMutationsReturnTheirOwnUpdatedRow(t *testing.T) {
 			WHERE id = NEW.id;
 		END
 	`); err != nil {
+		innerConn.Close()
 		t.Fatal(err)
 	}
+	innerConn.Close()
 
 	describe := "Updated by mutation"
 	updated, err := UpdateLoopSeed(conn, "review", LoopSeedPatch{Describe: &describe})
@@ -290,19 +303,61 @@ func TestLoopSeedRemoveWithHistoryRequiresArchive(t *testing.T) {
 
 func openLoopTestDB(t *testing.T) *sql.DB {
 	t.Helper()
-	conn, err := Open(":memory:")
+	dir := t.TempDir()
+	innerPath, outerPath := setupDualDB(t, dir)
+	conn, err := OpenOuter(outerPath, innerPath)
 	if err != nil {
 		t.Fatal(err)
 	}
 	conn.SetMaxOpenConns(1)
 	t.Cleanup(func() { conn.Close() })
-	applyLoopTestSchema(t, conn)
 	return conn
 }
 
-func applyLoopTestSchema(t *testing.T, conn *sql.DB) {
+func setupDualDB(t *testing.T, dir string) (innerPath, outerPath string) {
 	t.Helper()
-	schema, err := os.ReadFile(filepath.Join("..", "..", "examples", "base-agent", "init_schema.sql"))
+	innerPath = filepath.Join(dir, "roll-inner.db")
+	outerPath = filepath.Join(dir, "roll-outer.db")
+
+	// Create inner DB with schema only (no seed data from init_data.sql)
+	innerConn, err := Open(innerPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	applyInnerSchema(t, innerConn)
+	if err := innerConn.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create outer DB with schema
+	outerConn, err := Open(outerPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	applyOuterSchema(t, outerConn)
+	if err := outerConn.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	return innerPath, outerPath
+}
+
+func applyInnerSchema(t *testing.T, conn *sql.DB) {
+	t.Helper()
+	schemaPath := filepath.Join("..", "..", "examples", "base-agent", "init_inner.sql")
+	schema, err := os.ReadFile(schemaPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.Exec(string(schema)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func applyOuterSchema(t *testing.T, conn *sql.DB) {
+	t.Helper()
+	schemaPath := filepath.Join("..", "..", "examples", "base-agent", "init_outer.sql")
+	schema, err := os.ReadFile(schemaPath)
 	if err != nil {
 		t.Fatal(err)
 	}
