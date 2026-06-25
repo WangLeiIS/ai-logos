@@ -23,9 +23,19 @@ type Page struct {
 	ID        int    `json:"id"`
 	PageID    string `json:"page_id"`
 	Cwd       string `json:"cwd"`
+	Alias     string `json:"alias,omitempty"`
 	Context   string `json:"context"`
 	CreatedAt string `json:"created_at"`
 	UpdatedAt string `json:"updated_at"`
+}
+
+// PageBrief is a lightweight page representation without context,
+// used for structured CLI output to encourage agent to call get-context.
+type PageBrief struct {
+	PageID    string `json:"page_id"`
+	Cwd       string `json:"cwd"`
+	Alias     string `json:"alias,omitempty"`
+	CreatedAt string `json:"created_at"`
 }
 
 type Memory struct {
@@ -127,7 +137,7 @@ func InsertPage(db *sql.DB, cwd string) (*Page, error) {
 
 func ListPagesByCwd(db *sql.DB, cwd string) ([]Page, error) {
 	rows, err := db.Query(
-		"SELECT id, page_id, cwd, context, created_at, updated_at FROM pages WHERE cwd = ?",
+		"SELECT id, page_id, cwd, COALESCE(alias,''), context, created_at, updated_at FROM pages WHERE cwd = ?",
 		cwd,
 	)
 	if err != nil {
@@ -138,7 +148,7 @@ func ListPagesByCwd(db *sql.DB, cwd string) ([]Page, error) {
 	var result []Page
 	for rows.Next() {
 		var p Page
-		if err := rows.Scan(&p.ID, &p.PageID, &p.Cwd, &p.Context, &p.CreatedAt, &p.UpdatedAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.PageID, &p.Cwd, &p.Alias, &p.Context, &p.CreatedAt, &p.UpdatedAt); err != nil {
 			return nil, err
 		}
 		result = append(result, p)
@@ -149,9 +159,9 @@ func ListPagesByCwd(db *sql.DB, cwd string) ([]Page, error) {
 func GetPageByPageID(db *sql.DB, pageID string) (*Page, error) {
 	var p Page
 	err := db.QueryRow(
-		"SELECT id, page_id, cwd, context, created_at, updated_at FROM pages WHERE page_id = ?",
+		"SELECT id, page_id, cwd, COALESCE(alias,''), context, created_at, updated_at FROM pages WHERE page_id = ?",
 		pageID,
-	).Scan(&p.ID, &p.PageID, &p.Cwd, &p.Context, &p.CreatedAt, &p.UpdatedAt)
+	).Scan(&p.ID, &p.PageID, &p.Cwd, &p.Alias, &p.Context, &p.CreatedAt, &p.UpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, pageNotFound(pageID)
 	}
