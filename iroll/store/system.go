@@ -127,10 +127,12 @@ func ListAllPages(cwd string) ([]map[string]interface{}, error) {
 	defer db.Close()
 
 	query := `
-		SELECT p.iroll_name, p.iroll_version, p.page_id, p.cwd, p.outer_db_path, p.created_at,
-			CASE WHEN a.page_id IS NOT NULL THEN 1 ELSE 0 END AS active
+		SELECT p.iroll_name, p.iroll_version, p.page_id, p.cwd, p.outer_db_path, p.created_at, p.alias,
+			CASE WHEN a.page_id IS NOT NULL THEN 1 ELSE 0 END AS active,
+			CASE WHEN c.key IS NOT NULL THEN 1 ELSE 0 END AS is_default
 		FROM page_index p
 		LEFT JOIN active_page a ON p.cwd = a.cwd AND p.page_id = a.page_id
+		LEFT JOIN config c ON c.key = 'default_page:' || p.iroll_name AND c.value = p.page_id
 	`
 	var rows *sql.Rows
 	if cwd != "" {
@@ -147,9 +149,9 @@ func ListAllPages(cwd string) ([]map[string]interface{}, error) {
 
 	var result []map[string]interface{}
 	for rows.Next() {
-		var name, version, pid, c, odbp, t string
-		var active int
-		if err := rows.Scan(&name, &version, &pid, &c, &odbp, &t, &active); err != nil {
+		var name, version, pid, c, odbp, t, alias string
+		var active, isDefault int
+		if err := rows.Scan(&name, &version, &pid, &c, &odbp, &t, &alias, &active, &isDefault); err != nil {
 			return nil, err
 		}
 		result = append(result, map[string]interface{}{
@@ -159,6 +161,8 @@ func ListAllPages(cwd string) ([]map[string]interface{}, error) {
 			"outer_db_path": odbp,
 			"created_at":    t,
 			"active":        active == 1,
+			"alias":         alias,
+			"default":       isDefault == 1,
 		})
 	}
 	return result, nil

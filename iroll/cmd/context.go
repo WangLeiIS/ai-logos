@@ -56,8 +56,15 @@ var updateContextCmd = &cobra.Command{
 		_, _, pageID, conn := resolvePageContext(args, updateContextPage, updateContextAlias, updateContextRoll, cwd)
 		defer conn.Close()
 
+		hasContent := cmd.Flags().Changed("content")
+		hasSetAlias := cmd.Flags().Changed("set-alias")
+
+		if !hasContent && !hasSetAlias {
+			outputError("at least one of --content or --set-alias is required")
+		}
+
 		// Handle --set-alias
-		if cmd.Flags().Changed("set-alias") {
+		if hasSetAlias {
 			// Update alias in page_index (system.db)
 			if err := store.SetPageAlias(pageID, updateContextSetAlias); err != nil {
 				outputError(err.Error())
@@ -68,11 +75,20 @@ var updateContextCmd = &cobra.Command{
 			}
 		}
 
-		p, err := db.UpdatePageContext(conn, pageID, updateContextContext)
+		if hasContent {
+			p, err := db.UpdatePageContext(conn, pageID, updateContextContext)
+			if err != nil {
+				outputError(err.Error())
+			}
+			outputJSON(p)
+			return
+		}
+
+		// Only alias was set, return current page
+		p, err := db.GetPageByPageID(conn, pageID)
 		if err != nil {
 			outputError(err.Error())
 		}
-
 		outputJSON(p)
 	},
 }
@@ -173,7 +189,6 @@ func init() {
 	updateContextCmd.Flags().StringVar(&updateContextSetAlias, "set-alias", "", "Set page alias")
 	updateContextCmd.Flags().StringVar(&updateContextContext, "content", "", "New context")
 	updateContextCmd.Flags().StringVar(&updateContextCwd, "cwd", ".", "Working directory")
-	updateContextCmd.MarkFlagRequired("content")
 
 	pageCmd.AddCommand(getContextCmd)
 	pageCmd.AddCommand(updateContextCmd)

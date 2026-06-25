@@ -106,11 +106,14 @@ var pageNewCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		name, version, err := builder.ParseTag(args[0])
 		if err != nil {
-			outputError(fmt.Sprintf("invalid tag: %v", err))
+			outputFail(ErrCodeInvalidTag, fmt.Sprintf("invalid tag: %v", err), []Hint{
+				{Action: "List all available iroll packages", Cmd: "logos status --list"},
+				{Action: "Build an iroll from an Irollfile", Cmd: "logos roll build -f <Irollfile> -t <name>"},
+			})
 		}
 		cwd, outerPath, err := resolvePageNewCwd(name, version, args)
 		if err != nil {
-			outputError(err.Error())
+			outputFail(ErrCodeInternal, err.Error(), nil)
 		}
 		innerPath := checkedInnerPath(name, version)
 
@@ -118,42 +121,49 @@ var pageNewCmd = &cobra.Command{
 		if _, err := os.Stat(outerPath); os.IsNotExist(err) {
 			templateOuter := filepath.Join(checkedIrollPath(name, version), "roll-outer.db")
 			if err := copyFile(templateOuter, outerPath); err != nil {
-				outputError(fmt.Sprintf("copy outer db template: %v", err))
+				outputFail(ErrCodeInternal, fmt.Sprintf("copy outer db template: %v", err), nil)
 			}
 		}
 
 		conn, err := db.OpenOuter(outerPath, innerPath)
 		if err != nil {
-			outputError(err.Error())
+			outputFail(ErrCodeDBOpen, err.Error(), nil)
 		}
 		defer conn.Close()
 
 		p, err := db.InsertPage(conn, cwd)
 		if err != nil {
-			outputError(err.Error())
+			outputFail(ErrCodeInternal, err.Error(), nil)
 		}
 
 		if _, err := db.AutoStartLoopSeeds(conn, p.PageID); err != nil {
-			outputError("auto-start loop seeds: " + err.Error())
+			outputFail(ErrCodeInternal, "auto-start loop seeds: "+err.Error(), nil)
 		}
 
 		if err := store.IndexPage(name, version, p.PageID, cwd, outerPath, ""); err != nil {
-			outputError(err.Error())
+			outputFail(ErrCodeInternal, err.Error(), nil)
 		}
 
 		// Auto-set as default page when using workspace (no explicit cwd)
 		if pageNewCwd == "" && len(args) < 2 {
 			if err := store.SetDefaultPage(name, p.PageID); err != nil {
-				outputError("set default page: " + err.Error())
+				outputFail(ErrCodeInternal, "set default page: "+err.Error(), nil)
 			}
 		}
 
-		p.Context, err = db.ResolveContext(p.Context, checkedIrollPath(name, version), conn, p.PageID)
-		if err != nil {
-			outputError(err.Error())
+		brief := &db.PageBrief{
+			PageID:    p.PageID,
+			Cwd:       p.Cwd,
+			Alias:     p.Alias,
+			CreatedAt: p.CreatedAt,
 		}
 
-		outputJSON(p)
+		hints := []Hint{
+			{Action: "Set an alias for this page, so you can reference it by name later", Cmd: fmt.Sprintf("logos page update-context --page %s --set-alias <name>", p.PageID)},
+			{Action: "Get the full context including DNA, loops and system prompt", Cmd: fmt.Sprintf("logos page get-context --page %s", p.PageID)},
+		}
+
+		outputOK(brief, hints)
 	},
 }
 
