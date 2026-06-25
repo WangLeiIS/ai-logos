@@ -83,9 +83,25 @@ func Open(dbPath string) (*sql.DB, error) {
 	return sql.Open("sqlite3", path+"?"+query.Encode())
 }
 
+// OpenOuter opens the outer database and attaches the inner database.
+// All inner tables (metadata, dna, loop, book, skill, history, template pages/memory)
+// are accessed with the inner. prefix in SQL queries.
+func OpenOuter(outerPath, innerPath string) (*sql.DB, error) {
+	conn, err := Open(outerPath)
+	if err != nil {
+		return nil, err
+	}
+	_, err = conn.Exec("ATTACH DATABASE ? AS inner", innerPath)
+	if err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("attach inner: %w", err)
+	}
+	return conn, nil
+}
+
 func InsertPage(db *sql.DB, cwd string) (*Page, error) {
 	var templateContext string
-	db.QueryRow("SELECT context FROM pages WHERE page_id = '0'").Scan(&templateContext)
+	db.QueryRow("SELECT context FROM inner.pages WHERE page_id = '0'").Scan(&templateContext)
 
 	pageID := uuid.New().String()
 	now := nowISO()
@@ -328,7 +344,7 @@ func resolveSQL(db *sql.DB, query string) interface{} {
 }
 
 func QueryDna(db *sql.DB, name string, dnaType string) ([]Dna, error) {
-	query := "SELECT id, name, type, question, answer, weight, created_at, updated_at FROM dna WHERE name LIKE ?"
+	query := "SELECT id, name, type, question, answer, weight, created_at, updated_at FROM inner.dna WHERE name LIKE ?"
 	args := []interface{}{"%" + name + "%"}
 	if dnaType != "" {
 		query += " AND type = ?"

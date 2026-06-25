@@ -120,7 +120,7 @@ const availableLoopSeedsQuery = `
 		COALESCE(stats.aborted, 0),
 		latest_ended.ended_at,
 		COALESCE(latest_ended.result, 'null')
-	FROM loop
+	FROM inner.loop AS loop
 	LEFT JOIN stats ON stats.loop_id = loop.id
 	LEFT JOIN loop_runs latest_ended ON latest_ended.id = (
 		SELECT candidate.id

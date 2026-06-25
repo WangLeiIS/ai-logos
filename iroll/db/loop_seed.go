@@ -24,7 +24,7 @@ func InsertLoopSeed(conn *sql.DB, name, loopType, describe, content string, weig
 
 	now := nowISO()
 	result, err := conn.Exec(`
-		INSERT INTO loop (name, type, describe, content, weight, created_at, updated_at)
+		INSERT INTO inner.loop (name, type, describe, content, weight, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?)
 	`, name, loopType, describe, content, weight, now, now)
 	if err != nil {
@@ -95,7 +95,7 @@ func UpdateLoopSeed(conn *sql.DB, name string, patch LoopSeedPatch) (*LoopSeed, 
 	args = append(args, nowISO(), name)
 
 	seed, err := scanLoopSeed(conn.QueryRow(
-		"UPDATE loop SET "+strings.Join(fields, ", ")+" WHERE name = ? "+loopSeedReturning,
+		"UPDATE inner.loop SET "+strings.Join(fields, ", ")+" WHERE name = ? "+loopSeedReturning,
 		args...,
 	))
 	if errors.Is(err, sql.ErrNoRows) {
@@ -114,7 +114,7 @@ func GetLoopSeedByName(conn *sql.DB, name string) (*LoopSeed, error) {
 	}
 	seed, err := scanLoopSeed(conn.QueryRow(`
 		SELECT id, name, type, describe, content, weight, archived_at, created_at, updated_at
-		FROM loop
+		FROM inner.loop
 		WHERE name = ?
 	`, name))
 	if errors.Is(err, sql.ErrNoRows) {
@@ -129,7 +129,7 @@ func GetLoopSeedByName(conn *sql.DB, name string) (*LoopSeed, error) {
 func ListLoopSeeds(conn *sql.DB, includeArchived bool) ([]LoopSeed, error) {
 	query := `
 		SELECT id, name, type, describe, content, weight, archived_at, created_at, updated_at
-		FROM loop
+		FROM inner.loop
 	`
 	if !includeArchived {
 		query += " WHERE archived_at IS NULL"
@@ -180,7 +180,7 @@ func RemoveLoopSeed(conn *sql.DB, name string) (err error) {
 	}()
 
 	var id int64
-	if err = tx.QueryRow("SELECT id FROM loop WHERE name = ?", name).Scan(&id); errors.Is(err, sql.ErrNoRows) {
+	if err = tx.QueryRow("SELECT id FROM inner.loop WHERE name = ?", name).Scan(&id); errors.Is(err, sql.ErrNoRows) {
 		return loopSeedNotFound(name)
 	} else if err != nil {
 		return fmt.Errorf("get loop seed %q for removal: %w", name, err)
@@ -192,7 +192,7 @@ func RemoveLoopSeed(conn *sql.DB, name string) (err error) {
 	if historyCount != 0 {
 		return fmt.Errorf("loop seed %q has run history; archive it instead", name)
 	}
-	if _, err = tx.Exec("DELETE FROM loop WHERE id = ?", id); err != nil {
+	if _, err = tx.Exec("DELETE FROM inner.loop WHERE id = ?", id); err != nil {
 		return fmt.Errorf("remove loop seed %q: %w", name, err)
 	}
 	if err = tx.Commit(); err != nil {
@@ -210,10 +210,10 @@ func setLoopSeedArchived(conn *sql.DB, name string, archived bool) (*LoopSeed, e
 	var args []any
 	if archived {
 		now := nowISO()
-		query = "UPDATE loop SET archived_at = ?, updated_at = ? WHERE name = ? " + loopSeedReturning
+		query = "UPDATE inner.loop SET archived_at = ?, updated_at = ? WHERE name = ? " + loopSeedReturning
 		args = []any{now, now, name}
 	} else {
-		query = "UPDATE loop SET archived_at = NULL, updated_at = ? WHERE name = ? " + loopSeedReturning
+		query = "UPDATE inner.loop SET archived_at = NULL, updated_at = ? WHERE name = ? " + loopSeedReturning
 		args = []any{nowISO(), name}
 	}
 	seed, err := scanLoopSeed(conn.QueryRow(query, args...))

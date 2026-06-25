@@ -51,7 +51,7 @@ func AutoStartLoopSeeds(conn *sql.DB, pageID string) ([]LoopRun, error) {
 	}
 
 	rows, err := conn.Query(`
-		SELECT name FROM loop
+		SELECT name FROM inner.loop
 		WHERE type = 'auto' AND archived_at IS NULL
 		ORDER BY weight DESC, name ASC
 	`)
@@ -323,7 +323,7 @@ func ListLoopHistory(conn *sql.DB, seedName, pageID string, limit int) ([]LoopRu
 		return nil, err
 	}
 	var loopID int64
-	if err := conn.QueryRow("SELECT id FROM loop WHERE name = ?", seedName).Scan(&loopID); errors.Is(err, sql.ErrNoRows) {
+	if err := conn.QueryRow("SELECT id FROM inner.loop WHERE name = ?", seedName).Scan(&loopID); errors.Is(err, sql.ErrNoRows) {
 		return nil, loopSeedNotFound(seedName)
 	} else if err != nil {
 		return nil, fmt.Errorf("resolve loop seed %q for history: %w", seedName, err)
@@ -497,7 +497,7 @@ func ListActiveChildLoopRuns(conn *sql.DB, mainRunID int64) ([]LoopRun, error) {
 func getActiveLoopSeedForRun(tx *sql.Tx, name string) (*LoopSeed, error) {
 	seed, err := scanLoopSeed(tx.QueryRow(`
 		SELECT id, name, type, describe, content, weight, archived_at, created_at, updated_at
-		FROM loop
+		FROM inner.loop
 		WHERE name = ? AND archived_at IS NULL
 	`, name))
 	if errors.Is(err, sql.ErrNoRows) {

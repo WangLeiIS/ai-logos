@@ -59,7 +59,7 @@ func SyncBooks(conn *sql.DB, bundles []book.Bundle) (err error) {
 		}
 		now := nowISO()
 		if _, err = tx.Exec(`
-			INSERT INTO book (
+			INSERT INTO inner.book (
 				book_id, title, description, resource_path, format_version,
 				authors, language, tags, created_at, updated_at
 			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -79,7 +79,7 @@ func SyncBooks(conn *sql.DB, bundles []book.Bundle) (err error) {
 		present[manifest.BookID] = struct{}{}
 	}
 
-	rows, err := tx.Query("SELECT book_id FROM book ORDER BY book_id")
+	rows, err := tx.Query("SELECT book_id FROM inner.book ORDER BY book_id")
 	if err != nil {
 		return fmt.Errorf("list registered books during sync: %w", err)
 	}
@@ -101,7 +101,7 @@ func SyncBooks(conn *sql.DB, bundles []book.Bundle) (err error) {
 	rows.Close()
 
 	for _, bookID := range stale {
-		if _, err = tx.Exec("DELETE FROM book WHERE book_id = ?", bookID); err != nil {
+		if _, err = tx.Exec("DELETE FROM inner.book WHERE book_id = ?", bookID); err != nil {
 			return fmt.Errorf("delete stale book %q: %w", bookID, err)
 		}
 	}
@@ -115,7 +115,7 @@ func ListBooks(conn *sql.DB) ([]book.Book, error) {
 	rows, err := conn.Query(`
 		SELECT book_id, title, description, resource_path, format_version,
 		       authors, language, tags, created_at, updated_at
-		FROM book
+		FROM inner.book
 		ORDER BY book_id
 	`)
 	if err != nil {
@@ -141,7 +141,7 @@ func GetBook(conn *sql.DB, bookID string) (*book.Book, error) {
 	item, err := scanBook(conn.QueryRow(`
 		SELECT book_id, title, description, resource_path, format_version,
 		       authors, language, tags, created_at, updated_at
-		FROM book
+		FROM inner.book
 		WHERE book_id = ?
 	`, bookID))
 	if err != nil {
