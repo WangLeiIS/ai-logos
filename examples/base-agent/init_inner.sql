@@ -79,6 +79,7 @@ CREATE TABLE pages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     page_id TEXT NOT NULL,
     cwd TEXT,
+    alias TEXT,
     context TEXT NOT NULL,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL

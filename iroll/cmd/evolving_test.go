@@ -43,7 +43,7 @@ func setupEvolvingTest(t *testing.T) (string, string) {
 	}
 	conn.Close()
 
-	if err := store.IndexPage(rollName, "latest", "page-one", cwd, ""); err != nil {
+	if err := store.IndexPage(rollName, "latest", "page-one", cwd, "", ""); err != nil {
 		t.Fatal(err)
 	}
 	return cwd, rollRoot

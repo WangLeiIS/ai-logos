@@ -534,7 +534,7 @@ func setupLoopCommandTest(t *testing.T) (string, *sql.DB) {
 	`, absoluteCwd); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.IndexPage("test-roll", "latest", "page-one", absoluteCwd, outerPath); err != nil {
+	if err := store.IndexPage("test-roll", "latest", "page-one", absoluteCwd, outerPath, ""); err != nil {
 		t.Fatal(err)
 	}
 	return cwd, conn

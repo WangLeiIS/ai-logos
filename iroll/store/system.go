@@ -78,11 +78,21 @@ func ensureSystemTables(db *sql.DB) error {
 		}
 	}
 
+	// Migration: add alias to page_index
+	if err := db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('page_index') WHERE name = 'alias'").Scan(&count); err != nil {
+		return err
+	}
+	if count == 0 {
+		if _, err := db.Exec("ALTER TABLE page_index ADD COLUMN alias TEXT"); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
 // IndexPage adds a page to the global index and sets it as active for the cwd
-func IndexPage(irollName string, version string, pageID string, cwd string, outerDbPath string) error {
+func IndexPage(irollName string, version string, pageID string, cwd string, outerDbPath string, alias string) error {
 	db, err := OpenSystem()
 	if err != nil {
 		return err
@@ -92,8 +102,8 @@ func IndexPage(irollName string, version string, pageID string, cwd string, oute
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 
 	_, err = db.Exec(
-		"INSERT INTO page_index (iroll_name, iroll_version, page_id, cwd, outer_db_path, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-		irollName, version, pageID, cwd, outerDbPath, now,
+		"INSERT INTO page_index (iroll_name, iroll_version, page_id, cwd, outer_db_path, alias, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		irollName, version, pageID, cwd, outerDbPath, alias, now,
 	)
 	if err != nil {
 		return fmt.Errorf("index page: %w", err)

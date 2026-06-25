@@ -209,7 +209,7 @@ func setupDeletePageStoreTest(t *testing.T) (*sql.DB, string, int64, int64, stri
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := IndexPage("test-roll", "latest", page.PageID, testCwd, outerPath); err != nil {
+	if err := IndexPage("test-roll", "latest", page.PageID, testCwd, outerPath, ""); err != nil {
 		t.Fatal(err)
 	}
 	return conn, page.PageID, main.ID, child.ID, testCwd

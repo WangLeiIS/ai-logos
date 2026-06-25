@@ -135,7 +135,7 @@ func TestPageSwitchChangesActive(t *testing.T) {
 	if err != nil {
 		t.Fatalf("InsertPage 1 returned error: %v", err)
 	}
-	if err := store.IndexPage("page-test", "latest", page1.PageID, cwd, ""); err != nil {
+	if err := store.IndexPage("page-test", "latest", page1.PageID, cwd, "", ""); err != nil {
 		t.Fatalf("IndexPage 1 returned error: %v", err)
 	}
 
@@ -153,7 +153,7 @@ func TestPageSwitchChangesActive(t *testing.T) {
 	if err != nil {
 		t.Fatalf("InsertPage 2 returned error: %v", err)
 	}
-	if err := store.IndexPage("page-test", "latest", page2.PageID, cwd, ""); err != nil {
+	if err := store.IndexPage("page-test", "latest", page2.PageID, cwd, "", ""); err != nil {
 		t.Fatalf("IndexPage 2 returned error: %v", err)
 	}
 
@@ -370,7 +370,7 @@ func TestPageDeleteCleansUp(t *testing.T) {
 	if err != nil {
 		t.Fatalf("InsertPage returned error: %v", err)
 	}
-	if err := store.IndexPage("page-test", "latest", page.PageID, cwd, ""); err != nil {
+	if err := store.IndexPage("page-test", "latest", page.PageID, cwd, "", ""); err != nil {
 		t.Fatalf("IndexPage returned error: %v", err)
 	}
 
