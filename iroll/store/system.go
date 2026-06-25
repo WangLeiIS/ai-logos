@@ -273,3 +273,103 @@ func SwitchPage(pageID string) (string, string, error) {
 	}
 	return irollName, irollVersion, nil
 }
+
+// SetDefaultPage sets the default page_id for an iroll name in the config table.
+func SetDefaultPage(name, pageID string) error {
+	db, err := OpenSystem()
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	key := "default_page:" + name
+	_, err = db.Exec(
+		"INSERT INTO config (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+		key, pageID,
+	)
+	return err
+}
+
+// GetDefaultPage returns the default page_id for an iroll name.
+// Returns empty string if no default is set.
+func GetDefaultPage(name string) (string, error) {
+	db, err := OpenSystem()
+	if err != nil {
+		return "", err
+	}
+	defer db.Close()
+
+	key := "default_page:" + name
+	var value string
+	err = db.QueryRow("SELECT value FROM config WHERE key = ?", key).Scan(&value)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	return value, err
+}
+
+// ClearDefaultPage removes the default page for an iroll name.
+func ClearDefaultPage(name string) error {
+	db, err := OpenSystem()
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	key := "default_page:" + name
+	_, err = db.Exec("DELETE FROM config WHERE key = ?", key)
+	return err
+}
+
+// LookupPageByAlias looks up a page by its alias from page_index.
+func LookupPageByAlias(alias string) (name, version, pageID, outerDbPath string, err error) {
+	db, err := OpenSystem()
+	if err != nil {
+		return "", "", "", "", err
+	}
+	defer db.Close()
+
+	err = db.QueryRow(
+		"SELECT iroll_name, iroll_version, page_id, outer_db_path FROM page_index WHERE alias = ?",
+		alias,
+	).Scan(&name, &version, &pageID, &outerDbPath)
+	if err == sql.ErrNoRows {
+		return "", "", "", "", fmt.Errorf("no page found with alias '%s'", alias)
+	}
+	return name, version, pageID, outerDbPath, err
+}
+
+// LookupPageByID looks up a page by page_id from page_index.
+func LookupPageByID(pageID string) (name, version, outerDbPath string, err error) {
+	db, err := OpenSystem()
+	if err != nil {
+		return "", "", "", err
+	}
+	defer db.Close()
+
+	err = db.QueryRow(
+		"SELECT iroll_name, iroll_version, outer_db_path FROM page_index WHERE page_id = ?",
+		pageID,
+	).Scan(&name, &version, &outerDbPath)
+	if err == sql.ErrNoRows {
+		return "", "", "", fmt.Errorf("page '%s' not found in index", pageID)
+	}
+	return name, version, outerDbPath, err
+}
+
+// SetPageAlias sets the alias for a page in page_index.
+func SetPageAlias(pageID, alias string) error {
+	db, err := OpenSystem()
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+
+	// Clear alias on empty
+	if alias == "" {
+		_, err = db.Exec("UPDATE page_index SET alias = NULL WHERE page_id = ?", pageID)
+	} else {
+		_, err = db.Exec("UPDATE page_index SET alias = ? WHERE page_id = ?", alias, pageID)
+	}
+	return err
+}
