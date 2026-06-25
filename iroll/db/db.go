@@ -173,6 +173,17 @@ func UpdatePageContext(db *sql.DB, pageID string, context string) (*Page, error)
 	return GetPageByPageID(db, pageID)
 }
 
+// UpdatePageAlias sets the alias for a page in the iroll's pages table.
+func UpdatePageAlias(db *sql.DB, pageID, alias string) error {
+	var err error
+	if alias == "" {
+		_, err = db.Exec("UPDATE pages SET alias = NULL WHERE page_id = ?", pageID)
+	} else {
+		_, err = db.Exec("UPDATE pages SET alias = ? WHERE page_id = ?", alias, pageID)
+	}
+	return err
+}
+
 func DeletePage(db *sql.DB, pageID string) error {
 	delay := time.Millisecond
 	for attempt := 0; ; attempt++ {

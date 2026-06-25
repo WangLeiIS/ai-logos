@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"database/sql"
+	"fmt"
 	"path/filepath"
 
 	"logos/builder"
@@ -12,8 +13,14 @@ import (
 )
 
 var getContextPage string
+var getContextRoll string
+var getContextAlias string
 var getContextCwd string
+
 var updateContextPage string
+var updateContextRoll string
+var updateContextAlias string
+var updateContextSetAlias string
 var updateContextContext string
 var updateContextCwd string
 
@@ -23,8 +30,7 @@ var getContextCmd = &cobra.Command{
 	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		cwd, _ := filepath.Abs(getContextCwd)
-		name, version, pageID := resolvePage(args, getContextPage, cwd)
-		conn := openOuterForPage(name, version, cwd, args)
+		name, version, pageID, conn := resolvePageContext(args, getContextPage, getContextAlias, getContextRoll, cwd)
 		defer conn.Close()
 
 		p, err := db.GetPageByPageID(conn, pageID)
@@ -47,9 +53,20 @@ var updateContextCmd = &cobra.Command{
 	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		cwd, _ := filepath.Abs(updateContextCwd)
-		name, version, pageID := resolvePage(args, updateContextPage, cwd)
-		conn := openOuterForPage(name, version, cwd, args)
+		_, _, pageID, conn := resolvePageContext(args, updateContextPage, updateContextAlias, updateContextRoll, cwd)
 		defer conn.Close()
+
+		// Handle --set-alias
+		if cmd.Flags().Changed("set-alias") {
+			// Update alias in page_index (system.db)
+			if err := store.SetPageAlias(pageID, updateContextSetAlias); err != nil {
+				outputError(err.Error())
+			}
+			// Also update alias in the iroll pages table
+			if err := db.UpdatePageAlias(conn, pageID, updateContextSetAlias); err != nil {
+				outputError(err.Error())
+			}
+		}
 
 		p, err := db.UpdatePageContext(conn, pageID, updateContextContext)
 		if err != nil {
@@ -60,12 +77,13 @@ var updateContextCmd = &cobra.Command{
 	},
 }
 
-// openOuterForPage opens the outer db (with inner attached) for the given
-// name/version. If args were provided (explicit tag), uses workspace default
-// outer db; otherwise uses the active page's outer path from GetActive.
-func openOuterForPage(name, version, cwd string, args []string) *sql.DB {
-	if len(args) > 0 {
-		outerPath, err := store.WorkspaceOuterDbPath(name, version)
+// resolvePageContext resolves args/flags into a db connection with attached inner db.
+// Priority: --page > --alias > --roll > positional arg > current cwd.
+// Returns (name, version, pageID, conn).
+func resolvePageContext(args []string, flagPage, flagAlias, flagRoll, cwd string) (string, string, string, *sql.DB) {
+	// 1. --page: look up by page_id
+	if flagPage != "" {
+		name, version, outerPath, err := store.LookupPageByID(flagPage)
 		if err != nil {
 			outputError(err.Error())
 		}
@@ -74,36 +92,85 @@ func openOuterForPage(name, version, cwd string, args []string) *sql.DB {
 		if err != nil {
 			outputError(err.Error())
 		}
-		return conn
+		return name, version, flagPage, conn
 	}
-	conn, _, _, _ := openOuterFromActive(cwd)
-	return conn
-}
 
-// resolvePage returns (name, version, pageID) from args or active page for the cwd
-func resolvePage(args []string, flagPage string, cwd string) (string, string, string) {
+	// 2. --alias: look up by alias
+	if flagAlias != "" {
+		name, version, pageID, outerPath, err := store.LookupPageByAlias(flagAlias)
+		if err != nil {
+			outputError(err.Error())
+		}
+		innerPath := checkedInnerPath(name, version)
+		conn, err := db.OpenOuter(outerPath, innerPath)
+		if err != nil {
+			outputError(err.Error())
+		}
+		return name, version, pageID, conn
+	}
+
+	// 3. --roll: use default page for the named iroll
+	if flagRoll != "" {
+		pageID, err := store.GetDefaultPage(flagRoll)
+		if err != nil {
+			outputError(err.Error())
+		}
+		if pageID == "" {
+			outputError(fmt.Sprintf("no default page for iroll '%s'", flagRoll))
+		}
+		_, version, outerPath, err := store.LookupPageByID(pageID)
+		if err != nil {
+			outputError(err.Error())
+		}
+		innerPath := checkedInnerPath(flagRoll, version)
+		conn, err := db.OpenOuter(outerPath, innerPath)
+		if err != nil {
+			outputError(err.Error())
+		}
+		return flagRoll, version, pageID, conn
+	}
+
+	// 4. Positional arg (iroll name): use default page for that iroll
 	if len(args) > 0 {
 		name, version, err := builder.ParseTag(args[0])
 		if err != nil {
 			outputError(err.Error())
 		}
-		return name, version, flagPage
+		pageID, err := store.GetDefaultPage(name)
+		if err != nil {
+			outputError(err.Error())
+		}
+		if pageID == "" {
+			errorMsg := fmt.Sprintf("no default page for iroll '%s', run 'logos page default <page-id>' or 'logos page new %s .'", name, name)
+			outputError(errorMsg)
+		}
+		_, _, outerPath, err := store.LookupPageByID(pageID)
+		if err != nil {
+			outputError(err.Error())
+		}
+		innerPath := checkedInnerPath(name, version)
+		conn, err := db.OpenOuter(outerPath, innerPath)
+		if err != nil {
+			outputError(err.Error())
+		}
+		return name, version, pageID, conn
 	}
-	name, version, pageID, _, err := store.GetActive(cwd)
-	if err != nil {
-		outputError(err.Error())
-	}
-	if flagPage != "" {
-		return name, version, flagPage
-	}
-	return name, version, pageID
+
+	// 5. Fallback: current cwd active page
+	conn, irollName, irollVersion, pageID := openOuterFromActive(cwd)
+	return irollName, irollVersion, pageID, conn
 }
 
 func init() {
 	getContextCmd.Flags().StringVar(&getContextPage, "page", "", "Page ID")
+	getContextCmd.Flags().StringVar(&getContextAlias, "alias", "", "Page alias")
+	getContextCmd.Flags().StringVar(&getContextRoll, "roll", "", "iroll name (uses default page)")
 	getContextCmd.Flags().StringVar(&getContextCwd, "cwd", ".", "Working directory")
 
 	updateContextCmd.Flags().StringVar(&updateContextPage, "page", "", "Page ID")
+	updateContextCmd.Flags().StringVar(&updateContextAlias, "alias", "", "Page alias")
+	updateContextCmd.Flags().StringVar(&updateContextRoll, "roll", "", "iroll name (uses default page)")
+	updateContextCmd.Flags().StringVar(&updateContextSetAlias, "set-alias", "", "Set page alias")
 	updateContextCmd.Flags().StringVar(&updateContextContext, "content", "", "New context")
 	updateContextCmd.Flags().StringVar(&updateContextCwd, "cwd", ".", "Working directory")
 	updateContextCmd.MarkFlagRequired("content")

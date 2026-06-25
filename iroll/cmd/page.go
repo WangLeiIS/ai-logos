@@ -141,6 +141,13 @@ var pageNewCmd = &cobra.Command{
 			outputError(err.Error())
 		}
 
+		// Auto-set as default page when using workspace (no explicit cwd)
+		if pageNewCwd == "" && len(args) < 2 {
+			if err := store.SetDefaultPage(name, p.PageID); err != nil {
+				outputError("set default page: " + err.Error())
+			}
+		}
+
 		p.Context, err = db.ResolveContext(p.Context, checkedIrollPath(name, version), conn, p.PageID)
 		if err != nil {
 			outputError(err.Error())
@@ -183,6 +190,67 @@ var pageDeleteCmd = &cobra.Command{
 			"deleted": "true",
 			"page_id": pageID,
 		})
+	},
+}
+
+var pageDefaultRoll string
+var pageDefaultClear bool
+
+var pageDefaultCmd = &cobra.Command{
+	Use:   "default [page-id]",
+	Short: "Set or show the default page for an iroll",
+	Args:  cobra.MaximumNArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		if len(args) > 0 {
+			// Set: logos page default <page-id>
+			pageID := args[0]
+			// Look up the iroll name for this page
+			name, _, _, err := store.LookupPageByID(pageID)
+			if err != nil {
+				outputError(err.Error())
+			}
+			if err := store.SetDefaultPage(name, pageID); err != nil {
+				outputError(err.Error())
+			}
+			outputJSON(map[string]string{
+				"status":  "ok",
+				"message": fmt.Sprintf("default page for '%s' set to %s", name, pageID),
+			})
+			return
+		}
+
+		// Show or clear
+		if pageDefaultClear && pageDefaultRoll != "" {
+			if err := store.ClearDefaultPage(pageDefaultRoll); err != nil {
+				outputError(err.Error())
+			}
+			outputJSON(map[string]string{
+				"status":  "ok",
+				"message": fmt.Sprintf("default page for '%s' cleared", pageDefaultRoll),
+			})
+			return
+		}
+
+		if pageDefaultRoll != "" {
+			pageID, err := store.GetDefaultPage(pageDefaultRoll)
+			if err != nil {
+				outputError(err.Error())
+			}
+			if pageID == "" {
+				outputJSON(map[string]string{
+					"iroll":        pageDefaultRoll,
+					"default_page": "",
+				})
+				return
+			}
+			outputJSON(map[string]string{
+				"iroll":        pageDefaultRoll,
+				"default_page": pageID,
+			})
+			return
+		}
+
+		outputError("usage: logos page default <page-id>  OR  logos page default --roll <name> [--clear]")
 	},
 }
 
@@ -262,11 +330,15 @@ func init() {
 	pageNewCmd.Flags().StringVar(&pageNewCwd, "cwd", "", "Working directory for the page")
 	pageCurrentCmd.Flags().StringVar(&pageCurrentCwd, "cwd", ".", "Working directory")
 
+	pageDefaultCmd.Flags().StringVar(&pageDefaultRoll, "roll", "", "iroll name")
+	pageDefaultCmd.Flags().BoolVar(&pageDefaultClear, "clear", false, "Clear the default page")
+
 	pageCmd.AddCommand(pageListCmd)
 	pageCmd.AddCommand(pageNewCmd)
 	pageCmd.AddCommand(pageSwitchCmd)
 	pageCmd.AddCommand(pageCurrentCmd)
 	pageCmd.AddCommand(pageDeleteCmd)
+	pageCmd.AddCommand(pageDefaultCmd)
 	pageCmd.AddCommand(queryDnaCmd)
 	rootCmd.AddCommand(pageCmd)
 }
