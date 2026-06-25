@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"logos/db"
 
 	"github.com/spf13/cobra"
@@ -145,16 +146,32 @@ func outputLoopList(cwd string, includeArchived bool, stats bool) error {
 	if stats {
 		seeds, err := runLoopListStats(cwd, includeArchived)
 		if err != nil {
-			outputError(err.Error())
+			outputFail(ErrCodeInternal, err.Error(), nil)
+			return nil
 		}
-		outputJSON(seeds)
+		outputOK(seeds, []Hint{
+			{Action: "Start a loop run from an available seed", Cmd: "logos loop run <seed-name>"},
+			{Action: "Inspect a loop seed for details", Cmd: "logos loop inspect <name>"},
+		})
 		return nil
 	}
 	seeds, err := runLoopList(cwd, includeArchived)
 	if err != nil {
-		outputError(err.Error())
+		outputFail(ErrCodeInternal, err.Error(), nil)
+		return nil
 	}
-	outputJSON(seeds)
+	hints := []Hint{}
+	if len(seeds) > 0 {
+		hints = append(hints, Hint{
+			Action: "Start a loop run from this seed",
+			Cmd:    fmt.Sprintf("logos loop run %s", seeds[0].Name),
+		})
+	}
+	hints = append(hints, Hint{
+		Action: "Add a new loop seed",
+		Cmd:    "logos loop add <name> --describe <desc> --content <json>",
+	})
+	outputOK(seeds, hints)
 	return nil
 }
 
@@ -170,53 +187,78 @@ func runLoopListStats(cwd string, includeArchived bool) ([]db.AvailableLoopSeed,
 func outputLoopInspect(cwd, name string) error {
 	seed, err := runLoopInspect(cwd, name)
 	if err != nil {
-		outputError(err.Error())
+		outputFail(ErrCodeInternal, err.Error(), nil)
+		return nil
 	}
-	outputJSON(seed)
+	outputOK(seed, []Hint{
+		{Action: "Start a loop run from this seed", Cmd: fmt.Sprintf("logos loop run %s", name)},
+		{Action: "Edit this seed's configuration", Cmd: fmt.Sprintf("logos loop edit %s --describe <desc>", name)},
+		{Action: "List all loop seeds", Cmd: "logos loop list"},
+	})
 	return nil
 }
 
 func outputLoopAdd(cwd, name, seedType, describe, content string, weight float64) error {
 	seed, err := runLoopAdd(cwd, name, seedType, describe, content, weight)
 	if err != nil {
-		outputError(err.Error())
+		outputFail(ErrCodeInternal, err.Error(), nil)
+		return nil
 	}
-	outputJSON(seed)
+	outputOK(seed, []Hint{
+		{Action: "Start a loop run from the new seed", Cmd: fmt.Sprintf("logos loop run %s", name)},
+		{Action: "List all loop seeds", Cmd: "logos loop list"},
+	})
 	return nil
 }
 
 func outputLoopEdit(cwd, name string, patch db.LoopSeedPatch) error {
 	seed, err := runLoopEdit(cwd, name, patch)
 	if err != nil {
-		outputError(err.Error())
+		outputFail(ErrCodeInternal, err.Error(), nil)
+		return nil
 	}
-	outputJSON(seed)
+	outputOK(seed, []Hint{
+		{Action: "Start a loop run from the updated seed", Cmd: fmt.Sprintf("logos loop run %s", name)},
+		{Action: "Inspect the updated seed", Cmd: fmt.Sprintf("logos loop inspect %s", name)},
+	})
 	return nil
 }
 
 func outputLoopRemove(cwd, name string) error {
 	if err := runLoopRemove(cwd, name); err != nil {
-		outputError(err.Error())
+		outputFail(ErrCodeInternal, err.Error(), nil)
+		return nil
 	}
-	outputJSON(map[string]string{"removed": name})
+	outputOK(map[string]string{"removed": name}, []Hint{
+		{Action: "List remaining loop seeds", Cmd: "logos loop list"},
+		{Action: "Add a new loop seed", Cmd: "logos loop add <name> --describe <desc> --content <json>"},
+	})
 	return nil
 }
 
 func outputLoopArchive(cwd, name string) error {
 	seed, err := runLoopArchive(cwd, name)
 	if err != nil {
-		outputError(err.Error())
+		outputFail(ErrCodeInternal, err.Error(), nil)
+		return nil
 	}
-	outputJSON(seed)
+	outputOK(seed, []Hint{
+		{Action: "List seeds including archived", Cmd: "logos loop list --archived"},
+		{Action: "Restore this seed if needed", Cmd: fmt.Sprintf("logos loop restore %s", name)},
+	})
 	return nil
 }
 
 func outputLoopRestore(cwd, name string) error {
 	seed, err := runLoopRestore(cwd, name)
 	if err != nil {
-		outputError(err.Error())
+		outputFail(ErrCodeInternal, err.Error(), nil)
+		return nil
 	}
-	outputJSON(seed)
+	outputOK(seed, []Hint{
+		{Action: "Start a loop run from the restored seed", Cmd: fmt.Sprintf("logos loop run %s", name)},
+		{Action: "List all loop seeds", Cmd: "logos loop list"},
+	})
 	return nil
 }
 
