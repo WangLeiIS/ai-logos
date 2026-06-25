@@ -69,7 +69,7 @@ func (e *Env) CreatePage(name, version, pageID, cwd string) (*db.Page, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := store.IndexPage(name, version, page.PageID, cwd); err != nil {
+	if err := store.IndexPage(name, version, page.PageID, cwd, ""); err != nil {
 		return nil, err
 	}
 	return page, nil

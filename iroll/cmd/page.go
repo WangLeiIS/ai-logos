@@ -24,7 +24,7 @@ var pageCurrentCmd = &cobra.Command{
 	Short: "Show current active page",
 	Run: func(cmd *cobra.Command, args []string) {
 		cwd, _ := filepath.Abs(pageCurrentCwd)
-		irollName, irollVersion, pageID, err := store.GetActive(cwd)
+		irollName, irollVersion, pageID, _, err := store.GetActive(cwd)
 		if err != nil {
 			outputError(err.Error())
 		}
@@ -129,7 +129,7 @@ var pageNewCmd = &cobra.Command{
 			outputError("auto-start loop seeds: " + err.Error())
 		}
 
-		if err := store.IndexPage(name, version, p.PageID, cwd); err != nil {
+		if err := store.IndexPage(name, version, p.PageID, cwd, ""); err != nil {
 			outputError(err.Error())
 		}
 

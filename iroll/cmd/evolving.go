@@ -73,7 +73,7 @@ func resolveEvolvingTarget(args []string) (string, string) {
 	if err != nil {
 		outputError(fmt.Sprintf("resolve cwd: %v", err))
 	}
-	name, version, _, err := store.GetActive(absCwd)
+	name, version, _, _, err := store.GetActive(absCwd)
 	if err != nil {
 		outputError(err.Error())
 	}

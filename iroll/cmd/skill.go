@@ -134,7 +134,7 @@ func resolveSkillRoll(cwd string, names []string) (string, string, error) {
 	if err != nil {
 		return "", "", fmt.Errorf("resolve cwd: %w", err)
 	}
-	name, version, _, err := store.GetActive(absoluteCwd)
+	name, version, _, _, err := store.GetActive(absoluteCwd)
 	return name, version, err
 }
 

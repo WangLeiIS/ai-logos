@@ -29,12 +29,40 @@ func IrollPath(name string, version string) (string, error) {
 	return safepath.Join(root, version)
 }
 
-func DbPath(name string, version string) (string, error) {
+// InnerDbPath returns the path to the inner database (roll-inner.db)
+func InnerDbPath(name string, version string) (string, error) {
 	root, err := IrollPath(name, version)
 	if err != nil {
 		return "", err
 	}
-	return safepath.Join(root, "ai_roll.db")
+	return safepath.Join(root, "roll-inner.db")
+}
+
+// Deprecated: use InnerDbPath
+func DbPath(name string, version string) (string, error) {
+	return InnerDbPath(name, version)
+}
+
+// WorkspaceOuterDbPath returns the outer db path for default workspace pages.
+func WorkspaceOuterDbPath(name, version string) (string, error) {
+	root, err := IrollPath(name, version)
+	if err != nil {
+		return "", err
+	}
+	ws, err := safepath.Join(root, "workspace")
+	if err != nil {
+		return "", err
+	}
+	return safepath.Join(ws, "."+name+".outer.db")
+}
+
+// CwdOuterDbPath returns the outer db path for custom-cwd pages.
+func CwdOuterDbPath(cwd, name string) (string, error) {
+	irollDir, err := safepath.Join(cwd, ".iroll")
+	if err != nil {
+		return "", err
+	}
+	return safepath.Join(irollDir, name+".db")
 }
 
 // ReadName reads the name value from metadata table inside ai_roll.db within a ZIP file

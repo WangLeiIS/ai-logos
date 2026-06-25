@@ -74,7 +74,7 @@ func resolvePage(args []string, flagPage string, cwd string) (string, string, st
 		}
 		return name, version, flagPage
 	}
-	name, version, pageID, err := store.GetActive(cwd)
+	name, version, pageID, _, err := store.GetActive(cwd)
 	if err != nil {
 		outputError(err.Error())
 	}

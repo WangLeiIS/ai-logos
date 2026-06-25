@@ -53,11 +53,36 @@ func ensureSystemTables(db *sql.DB) error {
 			value TEXT NOT NULL
 		)
 	`)
-	return err
+	if err != nil {
+		return err
+	}
+
+	// Migration: add outer_db_path to page_index
+	var count int
+	if err := db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('page_index') WHERE name = 'outer_db_path'").Scan(&count); err != nil {
+		return err
+	}
+	if count == 0 {
+		if _, err := db.Exec("ALTER TABLE page_index ADD COLUMN outer_db_path TEXT NOT NULL DEFAULT ''"); err != nil {
+			return err
+		}
+	}
+
+	// Migration: add outer_db_path to active_page
+	if err := db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('active_page') WHERE name = 'outer_db_path'").Scan(&count); err != nil {
+		return err
+	}
+	if count == 0 {
+		if _, err := db.Exec("ALTER TABLE active_page ADD COLUMN outer_db_path TEXT NOT NULL DEFAULT ''"); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // IndexPage adds a page to the global index and sets it as active for the cwd
-func IndexPage(irollName string, version string, pageID string, cwd string) error {
+func IndexPage(irollName string, version string, pageID string, cwd string, outerDbPath string) error {
 	db, err := OpenSystem()
 	if err != nil {
 		return err
@@ -67,8 +92,8 @@ func IndexPage(irollName string, version string, pageID string, cwd string) erro
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 
 	_, err = db.Exec(
-		"INSERT INTO page_index (iroll_name, iroll_version, page_id, cwd, created_at) VALUES (?, ?, ?, ?, ?)",
-		irollName, version, pageID, cwd, now,
+		"INSERT INTO page_index (iroll_name, iroll_version, page_id, cwd, outer_db_path, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+		irollName, version, pageID, cwd, outerDbPath, now,
 	)
 	if err != nil {
 		return fmt.Errorf("index page: %w", err)
@@ -76,9 +101,9 @@ func IndexPage(irollName string, version string, pageID string, cwd string) erro
 
 	// Upsert active page for this cwd
 	_, err = db.Exec(`
-		INSERT INTO active_page (cwd, iroll_name, iroll_version, page_id, updated_at) VALUES (?, ?, ?, ?, ?)
-		ON CONFLICT(cwd) DO UPDATE SET iroll_name=excluded.iroll_name, iroll_version=excluded.iroll_version, page_id=excluded.page_id, updated_at=excluded.updated_at
-	`, cwd, irollName, version, pageID, now)
+		INSERT INTO active_page (cwd, iroll_name, iroll_version, page_id, outer_db_path, updated_at) VALUES (?, ?, ?, ?, ?, ?)
+		ON CONFLICT(cwd) DO UPDATE SET iroll_name=excluded.iroll_name, iroll_version=excluded.iroll_version, page_id=excluded.page_id, outer_db_path=excluded.outer_db_path, updated_at=excluded.updated_at
+	`, cwd, irollName, version, pageID, outerDbPath, now)
 	return err
 }
 
@@ -92,7 +117,7 @@ func ListAllPages(cwd string) ([]map[string]interface{}, error) {
 	defer db.Close()
 
 	query := `
-		SELECT p.iroll_name, p.iroll_version, p.page_id, p.cwd, p.created_at,
+		SELECT p.iroll_name, p.iroll_version, p.page_id, p.cwd, p.outer_db_path, p.created_at,
 			CASE WHEN a.page_id IS NOT NULL THEN 1 ELSE 0 END AS active
 		FROM page_index p
 		LEFT JOIN active_page a ON p.cwd = a.cwd AND p.page_id = a.page_id
@@ -112,15 +137,16 @@ func ListAllPages(cwd string) ([]map[string]interface{}, error) {
 
 	var result []map[string]interface{}
 	for rows.Next() {
-		var name, version, pid, c, t string
+		var name, version, pid, c, odbp, t string
 		var active int
-		if err := rows.Scan(&name, &version, &pid, &c, &t, &active); err != nil {
+		if err := rows.Scan(&name, &version, &pid, &c, &odbp, &t, &active); err != nil {
 			return nil, err
 		}
 		result = append(result, map[string]interface{}{
-			"iroll":      name + ":" + version,
+			"iroll":         name + ":" + version,
 			"page_id":       pid,
 			"cwd":           c,
+			"outer_db_path": odbp,
 			"created_at":    t,
 			"active":        active == 1,
 		})
@@ -128,20 +154,20 @@ func ListAllPages(cwd string) ([]map[string]interface{}, error) {
 	return result, nil
 }
 
-// GetActive returns the active page for a given cwd (iroll_name, page_id)
-func GetActive(cwd string) (string, string, string, error) {
+// GetActive returns the active page for a given cwd (iroll_name, iroll_version, page_id, outer_db_path)
+func GetActive(cwd string) (string, string, string, string, error) {
 	db, err := OpenSystem()
 	if err != nil {
-		return "", "", "", err
+		return "", "", "", "", err
 	}
 	defer db.Close()
 
-	var name, version, pid string
-	err = db.QueryRow("SELECT iroll_name, iroll_version, page_id FROM active_page WHERE cwd = ?", cwd).Scan(&name, &version, &pid)
+	var name, version, pid, outerDbPath string
+	err = db.QueryRow("SELECT iroll_name, iroll_version, page_id, outer_db_path FROM active_page WHERE cwd = ?", cwd).Scan(&name, &version, &pid, &outerDbPath)
 	if err == sql.ErrNoRows {
-		return "", "", "", fmt.Errorf("no active page for cwd '%s', run 'logos page new <name>' first", cwd)
+		return "", "", "", "", fmt.Errorf("no active page for cwd '%s', run 'logos page new <name>' first", cwd)
 	}
-	return name, version, pid, err
+	return name, version, pid, outerDbPath, err
 }
 
 // DeletePage removes a page from the index, clears active if matching
@@ -212,8 +238,8 @@ func SwitchPage(pageID string) (string, string, error) {
 	}
 	defer db.Close()
 
-	var irollName, irollVersion, cwd string
-	err = db.QueryRow("SELECT iroll_name, iroll_version, cwd FROM page_index WHERE page_id = ?", pageID).Scan(&irollName, &irollVersion, &cwd)
+	var irollName, irollVersion, cwd, outerDbPath string
+	err = db.QueryRow("SELECT iroll_name, iroll_version, cwd, outer_db_path FROM page_index WHERE page_id = ?", pageID).Scan(&irollName, &irollVersion, &cwd, &outerDbPath)
 	if err == sql.ErrNoRows {
 		return "", "", fmt.Errorf("page '%s' not found in index", pageID)
 	}
@@ -223,9 +249,9 @@ func SwitchPage(pageID string) (string, string, error) {
 
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	_, err = db.Exec(`
-		INSERT INTO active_page (cwd, iroll_name, iroll_version, page_id, updated_at) VALUES (?, ?, ?, ?, ?)
-		ON CONFLICT(cwd) DO UPDATE SET iroll_name=excluded.iroll_name, iroll_version=excluded.iroll_version, page_id=excluded.page_id, updated_at=excluded.updated_at
-	`, cwd, irollName, irollVersion, pageID, now)
+		INSERT INTO active_page (cwd, iroll_name, iroll_version, page_id, outer_db_path, updated_at) VALUES (?, ?, ?, ?, ?, ?)
+		ON CONFLICT(cwd) DO UPDATE SET iroll_name=excluded.iroll_name, iroll_version=excluded.iroll_version, page_id=excluded.page_id, outer_db_path=excluded.outer_db_path, updated_at=excluded.updated_at
+	`, cwd, irollName, irollVersion, pageID, outerDbPath, now)
 	if err != nil {
 		return "", "", err
 	}
