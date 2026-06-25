@@ -23,25 +23,37 @@ var evolvingCwd string
 var evolvingCmd = &cobra.Command{
 	Use:   "evolving [name:version] [sql]",
 	Short: "Execute SQL against an iroll's ai_roll.db",
-	Long: `Execute arbitrary SQL statements against an iroll's ai_roll.db database.
-Supports SELECT (returns JSON rows) and mutations (returns affected row count).
+	Long: `Execute arbitrary SQL statements against an iroll's external database (with inner database attached).
+	Supports SELECT (returns JSON rows) and mutations (returns affected row count).
 
-Target iroll: specify a name:version tag explicitly, or omit to auto-detect from --cwd.
-SQL input (priority order): --sql flag, positional arguments, --file flag, stdin.`,
+	Target iroll: specify a name:version tag explicitly, or omit to auto-detect from --cwd.
+	SQL input (priority order): --sql flag, positional arguments, --file flag, stdin.`,
 	Args: cobra.ArbitraryArgs,
 	Run:  runEvolving,
 }
 
 func runEvolving(cmd *cobra.Command, args []string) {
 	name, version := resolveEvolvingTarget(args)
-	dbPath := checkedDbPath(name, version)
+	innerPath := checkedInnerPath(name, version)
+
+	// Use workspace default outer db (create from template if needed)
+	outerPath, err := store.WorkspaceOuterDbPath(name, version)
+	if err != nil {
+		outputError(err.Error())
+	}
+	if _, err := os.Stat(outerPath); os.IsNotExist(err) {
+		templateOuter := filepath.Join(checkedIrollPath(name, version), "roll-outer.db")
+		if err := copyFile(templateOuter, outerPath); err != nil {
+			outputError(fmt.Sprintf("copy outer db template: %v", err))
+		}
+	}
 
 	sql := resolveEvolvingSQL(args)
 	if sql == "" || strings.TrimSpace(sql) == "" {
 		outputError("no SQL provided (use --sql, positional args, --file, or stdin)")
 	}
 
-	conn, err := db.Open(dbPath)
+	conn, err := db.OpenOuter(outerPath, innerPath)
 	if err != nil {
 		outputError(err.Error())
 	}

@@ -17,7 +17,7 @@ var inspectCmd = &cobra.Command{
 		if err != nil {
 			outputError(fmt.Sprintf("invalid tag: %v", err))
 		}
-		conn, err := db.Open(checkedDbPath(name, version))
+		conn, err := db.Open(checkedInnerPath(name, version))
 		if err != nil {
 			outputError(err.Error())
 		}

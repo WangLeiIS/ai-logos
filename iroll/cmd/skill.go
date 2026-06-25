@@ -139,7 +139,7 @@ func resolveSkillRoll(cwd string, names []string) (string, string, error) {
 }
 
 func openSkillDB(name, version string) (*sql.DB, error) {
-	path, err := store.DbPath(name, version)
+	path, err := store.InnerDbPath(name, version)
 	if err != nil {
 		return nil, err
 	}

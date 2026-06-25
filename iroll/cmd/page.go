@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -24,15 +25,7 @@ var pageCurrentCmd = &cobra.Command{
 	Short: "Show current active page",
 	Run: func(cmd *cobra.Command, args []string) {
 		cwd, _ := filepath.Abs(pageCurrentCwd)
-		irollName, irollVersion, pageID, _, err := store.GetActive(cwd)
-		if err != nil {
-			outputError(err.Error())
-		}
-
-		conn, err := db.Open(checkedDbPath(irollName, irollVersion))
-		if err != nil {
-			outputError(err.Error())
-		}
+		conn, irollName, _, pageID := openOuterFromActive(cwd)
 		defer conn.Close()
 
 		p, err := db.GetPageByPageID(conn, pageID)
@@ -79,7 +72,12 @@ var pageListCmd = &cobra.Command{
 		if err != nil {
 			outputError(fmt.Sprintf("invalid tag: %v", err))
 		}
-		conn, err := db.Open(checkedDbPath(name, version))
+		innerPath := checkedInnerPath(name, version)
+		outerPath, err := store.WorkspaceOuterDbPath(name, version)
+		if err != nil {
+			outputError(err.Error())
+		}
+		conn, err := db.OpenOuter(outerPath, innerPath)
 		if err != nil {
 			outputError(err.Error())
 		}
@@ -110,11 +108,21 @@ var pageNewCmd = &cobra.Command{
 		if err != nil {
 			outputError(fmt.Sprintf("invalid tag: %v", err))
 		}
-		cwd, err := resolvePageNewCwd(name, version, args)
+		cwd, outerPath, err := resolvePageNewCwd(name, version, args)
 		if err != nil {
 			outputError(err.Error())
 		}
-		conn, err := db.Open(checkedDbPath(name, version))
+		innerPath := checkedInnerPath(name, version)
+
+		// Copy outer template if not exists
+		if _, err := os.Stat(outerPath); os.IsNotExist(err) {
+			templateOuter := filepath.Join(checkedIrollPath(name, version), "roll-outer.db")
+			if err := copyFile(templateOuter, outerPath); err != nil {
+				outputError(fmt.Sprintf("copy outer db template: %v", err))
+			}
+		}
+
+		conn, err := db.OpenOuter(outerPath, innerPath)
 		if err != nil {
 			outputError(err.Error())
 		}
@@ -129,7 +137,7 @@ var pageNewCmd = &cobra.Command{
 			outputError("auto-start loop seeds: " + err.Error())
 		}
 
-		if err := store.IndexPage(name, version, p.PageID, cwd, ""); err != nil {
+		if err := store.IndexPage(name, version, p.PageID, cwd, outerPath); err != nil {
 			outputError(err.Error())
 		}
 
@@ -182,25 +190,70 @@ var pageDeleteCmd = &cobra.Command{
 // 1. --cwd flag (if explicitly set)
 // 2. Second positional argument
 // 3. Default workspace: ~/.iroll/<name>/<version>/workspace/
-func resolvePageNewCwd(name, version string, args []string) (string, error) {
+// Returns (cwd, outerDbPath, error).
+func resolvePageNewCwd(name, version string, args []string) (string, string, error) {
 	// Priority 1: --cwd flag explicitly set
 	if pageNewCwd != "" {
-		return filepath.Abs(pageNewCwd)
+		absCwd, err := filepath.Abs(pageNewCwd)
+		if err != nil {
+			return "", "", err
+		}
+		outerPath, err := store.CwdOuterDbPath(absCwd, name)
+		if err != nil {
+			return "", "", err
+		}
+		// Ensure .iroll directory exists
+		if err := os.MkdirAll(filepath.Dir(outerPath), 0755); err != nil {
+			return "", "", err
+		}
+		return absCwd, outerPath, nil
 	}
 	// Priority 2: second positional argument
 	if len(args) > 1 {
-		return filepath.Abs(args[1])
+		absCwd, err := filepath.Abs(args[1])
+		if err != nil {
+			return "", "", err
+		}
+		outerPath, err := store.CwdOuterDbPath(absCwd, name)
+		if err != nil {
+			return "", "", err
+		}
+		if err := os.MkdirAll(filepath.Dir(outerPath), 0755); err != nil {
+			return "", "", err
+		}
+		return absCwd, outerPath, nil
 	}
 	// Priority 3: default workspace
 	irollPath, err := store.IrollPath(name, version)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	workspace := filepath.Join(irollPath, "workspace")
 	if err := os.MkdirAll(workspace, 0755); err != nil {
-		return "", err
+		return "", "", err
 	}
-	return workspace, nil
+	outerPath, err := store.WorkspaceOuterDbPath(name, version)
+	if err != nil {
+		return "", "", err
+	}
+	return workspace, outerPath, nil
+}
+
+func copyFile(src, dst string) error {
+	srcFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer srcFile.Close()
+
+	dstFile, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer dstFile.Close()
+
+	_, err = io.Copy(dstFile, srcFile)
+	return err
 }
 
 func init() {

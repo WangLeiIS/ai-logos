@@ -43,15 +43,15 @@ func openActiveLoop(cwd string) (string, string, *sql.DB, error) {
 	if err != nil {
 		return "", "", nil, fmt.Errorf("resolve cwd: %w", err)
 	}
-	name, version, pageID, _, err := store.GetActive(absoluteCwd)
+	name, version, pageID, outerDbPath, err := store.GetActive(absoluteCwd)
 	if err != nil {
 		return "", "", nil, err
 	}
-	dbPath, err := store.DbPath(name, version)
+	innerPath, err := store.InnerDbPath(name, version)
 	if err != nil {
 		return "", "", nil, err
 	}
-	conn, err := db.Open(dbPath)
+	conn, err := db.OpenOuter(outerDbPath, innerPath)
 	if err != nil {
 		return "", "", nil, err
 	}

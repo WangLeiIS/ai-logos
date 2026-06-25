@@ -1,10 +1,12 @@
 package cmd
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"os"
 
+	"logos/db"
 	"logos/store"
 
 	"github.com/spf13/cobra"
@@ -47,10 +49,30 @@ func checkedIrollPath(name string, version string) string {
 	return path
 }
 
+// Deprecated: use checkedInnerPath or openOuterFromActive.
 func checkedDbPath(name string, version string) string {
-	path, err := store.DbPath(name, version)
+	return checkedInnerPath(name, version)
+}
+
+func checkedInnerPath(name, version string) string {
+	path, err := store.InnerDbPath(name, version)
 	if err != nil {
 		outputError(err.Error())
 	}
 	return path
+}
+
+// openOuterFromActive gets the active page's outer db path from system.db,
+// opens it with inner attached, and returns the connection + metadata.
+func openOuterFromActive(cwd string) (*sql.DB, string, string, string) {
+	irollName, irollVersion, pageID, outerDbPath, err := store.GetActive(cwd)
+	if err != nil {
+		outputError(err.Error())
+	}
+	innerPath := checkedInnerPath(irollName, irollVersion)
+	conn, err := db.OpenOuter(outerDbPath, innerPath)
+	if err != nil {
+		outputError(err.Error())
+	}
+	return conn, irollName, irollVersion, pageID
 }

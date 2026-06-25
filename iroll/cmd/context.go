@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"database/sql"
 	"path/filepath"
 
 	"logos/builder"
@@ -23,10 +24,7 @@ var getContextCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		cwd, _ := filepath.Abs(getContextCwd)
 		name, version, pageID := resolvePage(args, getContextPage, cwd)
-		conn, err := db.Open(checkedDbPath(name, version))
-		if err != nil {
-			outputError(err.Error())
-		}
+		conn := openOuterForPage(name, version, cwd, args)
 		defer conn.Close()
 
 		p, err := db.GetPageByPageID(conn, pageID)
@@ -50,10 +48,7 @@ var updateContextCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		cwd, _ := filepath.Abs(updateContextCwd)
 		name, version, pageID := resolvePage(args, updateContextPage, cwd)
-		conn, err := db.Open(checkedDbPath(name, version))
-		if err != nil {
-			outputError(err.Error())
-		}
+		conn := openOuterForPage(name, version, cwd, args)
 		defer conn.Close()
 
 		p, err := db.UpdatePageContext(conn, pageID, updateContextContext)
@@ -63,6 +58,26 @@ var updateContextCmd = &cobra.Command{
 
 		outputJSON(p)
 	},
+}
+
+// openOuterForPage opens the outer db (with inner attached) for the given
+// name/version. If args were provided (explicit tag), uses workspace default
+// outer db; otherwise uses the active page's outer path from GetActive.
+func openOuterForPage(name, version, cwd string, args []string) *sql.DB {
+	if len(args) > 0 {
+		outerPath, err := store.WorkspaceOuterDbPath(name, version)
+		if err != nil {
+			outputError(err.Error())
+		}
+		innerPath := checkedInnerPath(name, version)
+		conn, err := db.OpenOuter(outerPath, innerPath)
+		if err != nil {
+			outputError(err.Error())
+		}
+		return conn
+	}
+	conn, _, _, _ := openOuterFromActive(cwd)
+	return conn
 }
 
 // resolvePage returns (name, version, pageID) from args or active page for the cwd
