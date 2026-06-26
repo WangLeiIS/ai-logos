@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -36,24 +35,21 @@ func runEvolving(cmd *cobra.Command, args []string) {
 	name, version := resolveEvolvingTarget(args)
 	innerPath := checkedInnerPath(name, version)
 
-	// Use workspace default outer db (create from template if needed)
-	outerPath, err := store.WorkspaceOuterDbPath(name, version)
-	if err != nil {
-		outputFail(ErrCodeInternal, err.Error(), nil)
-	}
-	if _, err := os.Stat(outerPath); os.IsNotExist(err) {
-		templateOuter := filepath.Join(checkedIrollPath(name, version), "roll-outer.db")
-		if err := copyFile(templateOuter, outerPath); err != nil {
-			outputFail(ErrCodeInternal, fmt.Sprintf("copy outer db template: %v", err), nil)
-		}
+	// evolving operates at the ROLL level: the template roll-outer.db + inner.db.
+	// It never touches page-level (cwd) live outer databases.
+	templateOuter := filepath.Join(checkedIrollPath(name, version), "roll-outer.db")
+	if _, err := os.Stat(templateOuter); err != nil {
+		outputFail(ErrCodeIrollNotFound, fmt.Sprintf("template outer db not found for %s:%s: %v", name, version, err), nil)
 	}
 
 	sql := resolveEvolvingSQL(args)
-	if sql == "" || strings.TrimSpace(sql) == "" {
+	if strings.TrimSpace(sql) == "" {
 		outputFail(ErrCodeInternal, "no SQL provided (use --sql, positional args, --file, or stdin)", nil)
 	}
 
-	conn, err := db.OpenOuter(outerPath, innerPath)
+	// Open the template as the main db with inner attached (both read-write).
+	// Bare tables address the template outer; inner.* addresses the blueprint.
+	conn, err := db.OpenOuter(templateOuter, innerPath)
 	if err != nil {
 		outputFail(ErrCodeDBOpen, err.Error(), nil)
 	}
@@ -66,7 +62,6 @@ func runEvolving(cmd *cobra.Command, args []string) {
 		}
 		outputFail(ErrCodeInternal, err.Error(), nil)
 	}
-
 	outputOK(results, nil)
 }
 
@@ -111,44 +106,10 @@ func isTagArg(args []string) bool {
 	return err == nil
 }
 
-// resolveEvolvingSQL resolves the SQL input from flags, args, file, or stdin.
+// resolveEvolvingSQL resolves the SQL input for evolving. The first positional arg
+// is a target tag (name:version), so it is skipped when extracting SQL from positionals.
 func resolveEvolvingSQL(args []string) string {
-	// Priority 1: --sql flag
-	if evolvingSQL != "" {
-		return evolvingSQL
-	}
-
-	// Priority 2: positional args (skip first if it's a tag)
-	if len(args) > 0 {
-		start := 0
-		if isTagArg(args) {
-			start = 1
-		}
-		if len(args) > start {
-			return strings.Join(args[start:], " ")
-		}
-	}
-
-	// Priority 3: --file flag
-	if evolvingFile != "" {
-		data, err := os.ReadFile(evolvingFile)
-		if err != nil {
-			outputFail(ErrCodeInternal, fmt.Sprintf("read file %q: %v", evolvingFile, err), nil)
-		}
-		return string(data)
-	}
-
-	// Priority 4: stdin
-	stat, _ := os.Stdin.Stat()
-	if (stat.Mode() & os.ModeCharDevice) == 0 {
-		data, err := io.ReadAll(os.Stdin)
-		if err != nil {
-			outputFail(ErrCodeInternal, fmt.Sprintf("read stdin: %v", err), nil)
-		}
-		return string(data)
-	}
-
-	return ""
+	return resolveSQLInput(evolvingSQL, evolvingFile, args, isTagArg(args))
 }
 
 func init() {
