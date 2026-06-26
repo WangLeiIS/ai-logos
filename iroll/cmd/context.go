@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"database/sql"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"path/filepath"
 
@@ -12,106 +14,174 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var getContextPage string
-var getContextRoll string
-var getContextAlias string
-var getContextCwd string
-
-var updateContextPage string
-var updateContextRoll string
-var updateContextAlias string
-var updateContextSetAlias string
-var updateContextContext string
-var updateContextCwd string
-
-var getContextCmd = &cobra.Command{
-	Use:   "get-context [name]",
-	Short: "Get context by page id",
-	Args:  cobra.MaximumNArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
-		cwd, _ := filepath.Abs(getContextCwd)
-		name, version, pageID, conn := resolvePageContext(args, getContextPage, getContextAlias, getContextRoll, cwd)
-		defer conn.Close()
-
-		p, err := db.GetPageByPageID(conn, pageID)
-		if err != nil {
-			outputFail(ErrCodePageNotFound, err.Error(), nil)
-		}
-
-		p.Context, err = db.ResolveContext(p.Context, checkedIrollPath(name, version), conn, p.PageID)
-		if err != nil {
-			outputFail(ErrCodeInternal, err.Error(), nil)
-		}
-
-		hints := getContextHints(p)
-		outputOK(p, hints)
-	},
+// pageTarget holds the shared page-targeting flags used by the context commands.
+type pageTarget struct {
+	page, alias, roll, cwd string
 }
 
-var updateContextCmd = &cobra.Command{
-	Use:   "update-context [name]",
-	Short: "Update page context",
+func (t *pageTarget) bind(cmd *cobra.Command) {
+	cmd.Flags().StringVar(&t.page, "page", "", "Page ID")
+	cmd.Flags().StringVar(&t.alias, "alias", "", "Page alias")
+	cmd.Flags().StringVar(&t.roll, "roll", "", "iroll name (uses default page)")
+	cmd.Flags().StringVar(&t.cwd, "cwd", ".", "Working directory")
+}
+
+var (
+	pageGetTarget   pageTarget
+	pageSetTarget   pageTarget
+	pageUnsetTarget pageTarget
+	pageAliasTarget pageTarget
+)
+
+var pageSetContent string
+var pageAliasClear bool
+
+// pageBrief converts a full Page into a lightweight PageBrief (no context),
+// encouraging callers to use `page get` when they need the context body.
+func pageBrief(p *db.Page) db.PageBrief {
+	return db.PageBrief{
+		PageID:    p.PageID,
+		Cwd:       p.Cwd,
+		Alias:     p.Alias,
+		CreatedAt: p.CreatedAt,
+	}
+}
+
+var pageGetCmd = &cobra.Command{
+	Use:   "get [path]",
+	Short: "Get page context (full, or a single resolved key by dot-path)",
 	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		cwd, _ := filepath.Abs(updateContextCwd)
-		_, _, pageID, conn := resolvePageContext(args, updateContextPage, updateContextAlias, updateContextRoll, cwd)
+		cwd, _ := filepath.Abs(pageGetTarget.cwd)
+		name, version, pageID, conn := resolvePageContext(nil, pageGetTarget.page, pageGetTarget.alias, pageGetTarget.roll, cwd)
 		defer conn.Close()
 
-		hasContent := cmd.Flags().Changed("content")
-		hasSetAlias := cmd.Flags().Changed("set-alias")
-
-		if !hasContent && !hasSetAlias {
-			outputFail(ErrCodeInternal, "at least one of --content or --set-alias is required", nil)
-		}
-
-		// Handle --set-alias
-		if hasSetAlias {
-			// Update alias in page_index (system.db)
-			if err := store.SetPageAlias(pageID, updateContextSetAlias); err != nil {
-				outputFail(ErrCodeInternal, err.Error(), nil)
+		if len(args) == 0 {
+			p, err := db.GetPageByPageID(conn, pageID)
+			if err != nil {
+				outputFail(ErrCodePageNotFound, err.Error(), nil)
 			}
-			// Also update alias in the iroll pages table
-			if err := db.UpdatePageAlias(conn, pageID, updateContextSetAlias); err != nil {
-				outputFail(ErrCodeInternal, err.Error(), nil)
-			}
-		}
-
-		if hasContent {
-			p, err := db.UpdatePageContext(conn, pageID, updateContextContext)
+			resolved, err := db.ResolveContext(p.Context, checkedIrollPath(name, version), conn, pageID)
 			if err != nil {
 				outputFail(ErrCodeInternal, err.Error(), nil)
 			}
-			outputOK(p, getContextHints(p))
+			outputOK(json.RawMessage(resolved), contextFollowupHints(p))
 			return
 		}
 
-		// Only alias was set, return current page
+		val, err := db.GetContextKey(conn, pageID, args[0], checkedIrollPath(name, version))
+		if err != nil {
+			if errors.Is(err, db.ErrContextKeyNotFound) {
+				outputFail(ErrCodeKeyNotFound, err.Error(), nil)
+			}
+			outputFail(ErrCodeInternal, err.Error(), nil)
+		}
+		outputOK(val, nil)
+	},
+}
+
+var pageSetCmd = &cobra.Command{
+	Use:   "set [path] [value]",
+	Short: "Set a context key (json-or-text value), or replace the whole context with --content",
+	Args:  cobra.MaximumNArgs(2),
+	Run: func(cmd *cobra.Command, args []string) {
+		cwd, _ := filepath.Abs(pageSetTarget.cwd)
+		_, _, pageID, conn := resolvePageContext(nil, pageSetTarget.page, pageSetTarget.alias, pageSetTarget.roll, cwd)
+		defer conn.Close()
+
+		if cmd.Flags().Changed("content") {
+			if len(args) > 0 {
+				outputFail(ErrCodeInternal, "--content cannot be combined with path/value arguments", nil)
+			}
+			p, err := db.UpdatePageContext(conn, pageID, pageSetContent)
+			if err != nil {
+				outputFail(ErrCodeInternal, err.Error(), nil)
+			}
+			outputOK(pageBrief(p), contextFollowupHints(p))
+			return
+		}
+
+		if len(args) != 2 {
+			outputFail(ErrCodeInternal, "usage: logos page set <path> <value>  (or: logos page set --content '<json>')", nil)
+		}
+		if err := db.SetContextKey(conn, pageID, args[0], args[1]); err != nil {
+			outputFail(ErrCodeInternal, err.Error(), nil)
+		}
 		p, err := db.GetPageByPageID(conn, pageID)
 		if err != nil {
 			outputFail(ErrCodeInternal, err.Error(), nil)
 		}
-		outputOK(p, getContextHints(p))
+		outputOK(pageBrief(p), contextFollowupHints(p))
 	},
 }
 
-// getContextHints returns hints suggesting the agent get the full context.
-func getContextHints(p *db.Page) []Hint {
-	hints := make([]Hint, 0, 2)
+var pageUnsetCmd = &cobra.Command{
+	Use:   "unset <path>",
+	Short: "Delete a context key by dot-path",
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		cwd, _ := filepath.Abs(pageUnsetTarget.cwd)
+		_, _, pageID, conn := resolvePageContext(nil, pageUnsetTarget.page, pageUnsetTarget.alias, pageUnsetTarget.roll, cwd)
+		defer conn.Close()
 
-	// If alias is set, suggest --alias lookup
-	if p.Alias != "" {
+		if err := db.UnsetContextKey(conn, pageID, args[0]); err != nil {
+			if errors.Is(err, db.ErrContextKeyNotFound) {
+				outputFail(ErrCodeKeyNotFound, err.Error(), nil)
+			}
+			outputFail(ErrCodeInternal, err.Error(), nil)
+		}
+		p, err := db.GetPageByPageID(conn, pageID)
+		if err != nil {
+			outputFail(ErrCodeInternal, err.Error(), nil)
+		}
+		outputOK(pageBrief(p), contextFollowupHints(p))
+	},
+}
+
+var pageAliasCmd = &cobra.Command{
+	Use:   "alias [name]",
+	Short: "Set or clear the page alias",
+	Args:  cobra.MaximumNArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		cwd, _ := filepath.Abs(pageAliasTarget.cwd)
+		_, _, pageID, conn := resolvePageContext(nil, pageAliasTarget.page, pageAliasTarget.alias, pageAliasTarget.roll, cwd)
+		defer conn.Close()
+
+		var alias string
+		if pageAliasClear {
+			alias = ""
+		} else {
+			if len(args) != 1 {
+				outputFail(ErrCodeInternal, "usage: logos page alias <name>  (or: logos page alias --clear)", nil)
+			}
+			alias = args[0]
+		}
+		if err := store.SetPageAlias(pageID, alias); err != nil {
+			outputFail(ErrCodeInternal, err.Error(), nil)
+		}
+		if err := db.UpdatePageAlias(conn, pageID, alias); err != nil {
+			outputFail(ErrCodeInternal, err.Error(), nil)
+		}
+		p, err := db.GetPageByPageID(conn, pageID)
+		if err != nil {
+			outputFail(ErrCodeInternal, err.Error(), nil)
+		}
+		outputOK(pageBrief(p), contextFollowupHints(p))
+	},
+}
+
+// contextFollowupHints suggests common next steps after a context read/write.
+func contextFollowupHints(p *db.Page) []Hint {
+	hints := []Hint{
+		{Action: "Read the full resolved context", Cmd: fmt.Sprintf("logos page get --page %s", p.PageID)},
+		{Action: "Update a single context key", Cmd: "logos page set <path> <value>"},
+	}
+	if p.Alias == "" {
 		hints = append(hints, Hint{
-			Action: "Get the full context including DNA, loops and system prompt",
-			Cmd:    fmt.Sprintf("logos page get-context --alias %s", p.Alias),
+			Action: "Set an alias to reference this page by name",
+			Cmd:    fmt.Sprintf("logos page alias <name> --page %s", p.PageID),
 		})
 	}
-
-	// Always suggest --page lookup as fallback
-	hints = append(hints, Hint{
-		Action: "Get the full context including DNA, loops and system prompt",
-		Cmd:    fmt.Sprintf("logos page get-context --page %s", p.PageID),
-	})
-
 	return hints
 }
 
@@ -176,7 +246,7 @@ func resolvePageContext(args []string, flagPage, flagAlias, flagRoll, cwd string
 		name, version, err := builder.ParseTag(args[0])
 		if err != nil {
 			outputFail(ErrCodeInvalidTag, fmt.Sprintf("invalid tag: %v", err), []Hint{
-				{Action: "List all available iroll packages", Cmd: "logos status --list"},
+				{Action: "List all available iroll packages", Cmd: "logos status"},
 			})
 		}
 		pageID, err := store.GetDefaultPage(name)
@@ -207,18 +277,15 @@ func resolvePageContext(args []string, flagPage, flagAlias, flagRoll, cwd string
 }
 
 func init() {
-	getContextCmd.Flags().StringVar(&getContextPage, "page", "", "Page ID")
-	getContextCmd.Flags().StringVar(&getContextAlias, "alias", "", "Page alias")
-	getContextCmd.Flags().StringVar(&getContextRoll, "roll", "", "iroll name (uses default page)")
-	getContextCmd.Flags().StringVar(&getContextCwd, "cwd", ".", "Working directory")
+	pageGetTarget.bind(pageGetCmd)
+	pageSetTarget.bind(pageSetCmd)
+	pageSetCmd.Flags().StringVar(&pageSetContent, "content", "", "Replace the whole context with this JSON")
+	pageUnsetTarget.bind(pageUnsetCmd)
+	pageAliasTarget.bind(pageAliasCmd)
+	pageAliasCmd.Flags().BoolVar(&pageAliasClear, "clear", false, "Clear the alias")
 
-	updateContextCmd.Flags().StringVar(&updateContextPage, "page", "", "Page ID")
-	updateContextCmd.Flags().StringVar(&updateContextAlias, "alias", "", "Page alias")
-	updateContextCmd.Flags().StringVar(&updateContextRoll, "roll", "", "iroll name (uses default page)")
-	updateContextCmd.Flags().StringVar(&updateContextSetAlias, "set-alias", "", "Set page alias")
-	updateContextCmd.Flags().StringVar(&updateContextContext, "content", "", "New context")
-	updateContextCmd.Flags().StringVar(&updateContextCwd, "cwd", ".", "Working directory")
-
-	pageCmd.AddCommand(getContextCmd)
-	pageCmd.AddCommand(updateContextCmd)
+	pageCmd.AddCommand(pageGetCmd)
+	pageCmd.AddCommand(pageSetCmd)
+	pageCmd.AddCommand(pageUnsetCmd)
+	pageCmd.AddCommand(pageAliasCmd)
 }

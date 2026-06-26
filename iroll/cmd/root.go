@@ -27,6 +27,7 @@ const (
 	ErrCodeDBOpen        = "db_open_failed"
 	ErrCodeInternal      = "internal"
 	ErrCodeNoActivePage  = "no_active_page"
+	ErrCodeKeyNotFound   = "key_not_found"
 )
 
 func jsonLine(v interface{}) string {
