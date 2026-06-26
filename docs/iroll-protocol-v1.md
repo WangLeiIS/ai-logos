@@ -1,5 +1,7 @@
 # .iroll Protocol v1
 
+> ⚠️ **本文档描述 v1 协议，部分内容已被后续设计取代**：DB 已拆分为 `roll-inner.db` + `roll-outer.db`；Irollfile 新增 `MIGRATE OUTER`（共 4 条指令）；`get-context`/`update-context` 已改名为 `page get`/`page set`；`schema_version` 已升至 2。**当前实现以 [README.md](../../README.md) 和 [docs/rebot-roll.md](rebot-roll.md) 为准。** 下方保留 v1 原始设计记录。
+
 .iroll（智能卷轴）是一个 AI agent 人格与状态包格式。它把 agent 的性格、习惯、记忆、知识和能力封装进一个 ZIP 文件，做到可构建、可分享、可演进。
 
 **版本**: v1  
@@ -19,9 +21,11 @@ agent.iroll (ZIP)
     └── ...                   # 其他任意资源文件
 ```
 
+> 📌 **v1 原始布局**：v1 用单一 `ai_roll.db`。**当前实现已拆分为 `roll-inner.db`（只读蓝图：metadata/dna/loop/skill/book/history + 模板行 page_id='0'）+ `roll-outer.db`（pages/memory/loop_runs schema 模板，运行时复制到 `<cwd>/.iroll/<name>.db`）**。打开方式为 outer 主库 `ATTACH roll-inner.db AS inner.`。
+
 **约束**:
 - .iroll 必须是有效的 ZIP 归档
-- 必须包含 `ai_roll.db`
+- 必须包含 `ai_roll.db`（**当前实现：`roll-inner.db` + `roll-outer.db`**）
 - `Resources/` 下的文件名和路径不受限制，但不能通过符号链接逃逸出包根目录
 
 ### 1.1 layer.json
@@ -40,11 +44,13 @@ agent.iroll (ZIP)
 
 - `layer_id`: 当前层的内容哈希（不含 layer.json 和 history），唯一标识一个构建产物
 - `parent`: 构建时的基础层 layer_id，如果是 FROM 构建
-- `schema_version`: .iroll 协议版本，当前固定为 1
+- `schema_version`: .iroll 协议版本，当前固定为 1（**当前实现已升至 2**）
 
 ---
 
 ## 2. ai_roll.db 数据库
+
+> 📌 **当前实现**：单一 `ai_roll.db` 已拆分为 `roll-inner.db`（只读蓝图）+ `roll-outer.db`（模板）。下方各表的 CREATE 在当前实现中通常落在 inner 库（蓝图部分：metadata/dna/loop/skill/book/history + 模板行 page_id='0'）或 outer 库（pages/memory/loop_runs schema）。`@sql` 查询 inner 库表时需加 `inner.` 前缀。
 
 ai_roll.db 是 .iroll 的核心，包含 7 张用户创建的表和 3 张自动维护的表。
 
@@ -117,6 +123,7 @@ CREATE TABLE dna (
 | id | INTEGER | PK AUTOINCREMENT | |
 | name | TEXT | NOT NULL UNIQUE | 稳定标识，如 `self-cognition` |
 | describe | TEXT | NOT NULL | 简短描述，如 "自我认知" |
+| type | TEXT | NOT NULL DEFAULT 'normal' CHECK (type IN ('auto','normal')) | 种子类型（**当前实现新增**） |
 | content | TEXT | NOT NULL | 完整行为指令 |
 | weight | REAL | NOT NULL DEFAULT 0.5, CHECK (0-1) | 优先级参考 |
 | archived_at | TEXT | | 非 NULL 表示已归档，不参与运行 |
@@ -128,6 +135,7 @@ CREATE TABLE loop (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL UNIQUE,
     describe TEXT NOT NULL,
+    type TEXT NOT NULL DEFAULT 'normal' CHECK (type IN ('auto', 'normal')),
     content TEXT NOT NULL,
     weight REAL NOT NULL DEFAULT 0.5 CHECK (weight >= 0 AND weight <= 1),
     archived_at TEXT,
@@ -198,9 +206,6 @@ CREATE INDEX idx_loop_runs_loop_started ON loop_runs(loop_id, id DESC);
 CREATE INDEX idx_loop_runs_loop_ended
     ON loop_runs(loop_id, ended_at DESC, id DESC)
     WHERE status IN ('completed', 'aborted') AND ended_at IS NOT NULL;
-CREATE UNIQUE INDEX idx_loop_runs_one_active_main
-    ON loop_runs(page_id)
-    WHERE status = 'active' AND parent_run_id IS NULL;
 ```
 
 ---
@@ -246,6 +251,7 @@ CREATE INDEX idx_memory_page ON memory(page_id, importance);
 |------|------|------|------|
 | id | INTEGER | PK AUTOINCREMENT | |
 | page_id | TEXT | NOT NULL | 页面唯一 ID（UUID） |
+| alias | TEXT | | 页面别名（**当前实现新增**） |
 | cwd | TEXT | | 工作目录 |
 | context | TEXT | NOT NULL | 页面上下文（JSON，见第 3 节） |
 | created_at | TEXT | NOT NULL | |
@@ -257,6 +263,7 @@ CREATE INDEX idx_memory_page ON memory(page_id, importance);
 CREATE TABLE pages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     page_id TEXT NOT NULL,
+    alias TEXT,
     cwd TEXT,
     context TEXT NOT NULL,
     created_at TEXT NOT NULL,
@@ -359,7 +366,7 @@ CREATE TABLE skill (
 | 文件引用 | `"key": {"@file": "Resources/..."}` | 读取时解析为文件内容 |
 | SQL 查询 | `"key": {"@sql": "SELECT ..."}` | 读取时解析为查询结果 |
 
-**解析规则**: `@file` 和 `@sql` 在读取时（`get-context`、`page new`）解析为实际值。写入时（`update-context`）存储原始标记，不做解析。
+**解析规则**: `@file` 和 `@sql` 在读取时（`page get`、`page new`）解析为实际值。写入时（`page set`）存储原始标记，不做解析。
 
 **示例**:
 ```json
@@ -374,7 +381,7 @@ CREATE TABLE skill (
 
 ### 3.1 Loop 自动注入
 
-`get-context` 和 `page new` 会动态注入一个 `loop` 字段（不在 pages.context 中存储）：
+`page get` 和 `page new` 会动态注入一个 `loop` 字段（不在 pages.context 中存储）：
 
 ```json
 {
@@ -444,7 +451,9 @@ description: 触发描述
 
 ## 5. Irollfile 构建指令
 
-仅三条指令：
+> 📌 **当前实现**：共 4 条指令（v1 仅三条）。新增 `MIGRATE OUTER` 用于操作 outer 库（pages/memory/loop_runs schema）。指令按 **Irollfile 文件中的书写顺序** 执行（v1 描述的 FROM → COPY → MIGRATE 分组顺序已不准确）。
+
+v1 仅三条指令：
 
 | 指令 | 格式 | 说明 |
 |------|------|------|
@@ -452,9 +461,15 @@ description: 触发描述
 | MIGRATE | `MIGRATE <file.sql>` | 执行 SQL（建表、改字段、插数据） |
 | COPY | `COPY <src> <dest>` | 复制文件到 Resources/ |
 
+**当前实现追加**：
+
+| 指令 | 格式 | 说明 |
+|------|------|------|
+| MIGRATE OUTER | `MIGRATE OUTER <file.sql>` | 对 outer 库执行 SQL（建 pages/memory/loop_runs 等 schema） |
+
 **构建流程**:
 
-1. 处理 Irollfile 指令（FROM → COPY → MIGRATE，逐条执行，遇错停止）
+1. 处理 Irollfile 指令（**按文件中的书写顺序逐条执行**，遇错停止；v1 文档原写的 FROM → COPY → MIGRATE 分组顺序已不准确）
 2. 发现并校验 `Resources/books/` → 注册到 book 表
 3. 发现并校验 `Resources/skills/` → 注册到 skill 表
 4. 计算 layer_id（内容哈希）
@@ -479,6 +494,9 @@ CREATE TABLE page_index (
     iroll_name TEXT NOT NULL,
     page_id TEXT NOT NULL,
     cwd TEXT NOT NULL,
+    alias TEXT,
+    iroll_version INTEGER NOT NULL DEFAULT 1,
+    outer_db_path TEXT,
     created_at TEXT NOT NULL
 );
 
@@ -487,6 +505,8 @@ CREATE TABLE active_page (
     cwd TEXT NOT NULL UNIQUE,
     iroll_name TEXT NOT NULL,
     page_id TEXT NOT NULL,
+    iroll_version INTEGER NOT NULL DEFAULT 1,
+    outer_db_path TEXT,
     updated_at TEXT NOT NULL
 );
 
