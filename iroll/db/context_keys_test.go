@@ -142,9 +142,14 @@ func TestSetContextKeyNewNested(t *testing.T) {
 	if err := SetContextKey(conn, "p1", "user_context.stats.count", "3"); err != nil {
 		t.Fatalf("SetContextKey new nested: %v", err)
 	}
-	p, _ := GetPageByPageID(conn, "p1")
+	p, err := GetPageByPageID(conn, "p1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	var got map[string]interface{}
-	json.Unmarshal([]byte(p.Context), &got)
+	if err := json.Unmarshal([]byte(p.Context), &got); err != nil {
+		t.Fatal(err)
+	}
 	if v, _ := navigateGet(got, "user_context.stats.count"); v != float64(3) {
 		t.Fatalf("new nested not created/parsed, got %v", v)
 	}
@@ -156,9 +161,14 @@ func TestSetContextKeyStoresMarkerRaw(t *testing.T) {
 	if err := SetContextKey(conn, "p1", "name", marker); err != nil {
 		t.Fatalf("SetContextKey marker: %v", err)
 	}
-	p, _ := GetPageByPageID(conn, "p1")
+	p, err := GetPageByPageID(conn, "p1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	var got map[string]interface{}
-	json.Unmarshal([]byte(p.Context), &got)
+	if err := json.Unmarshal([]byte(p.Context), &got); err != nil {
+		t.Fatal(err)
+	}
 	val, _ := navigateGet(got, "name")
 	obj, ok := val.(map[string]interface{})
 	if !ok {
@@ -174,11 +184,39 @@ func TestUnsetContextKey(t *testing.T) {
 	if err := UnsetContextKey(conn, "p1", "user_context.todo"); err != nil {
 		t.Fatalf("UnsetContextKey: %v", err)
 	}
-	p, _ := GetPageByPageID(conn, "p1")
+	p, err := GetPageByPageID(conn, "p1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	var got map[string]interface{}
-	json.Unmarshal([]byte(p.Context), &got)
+	if err := json.Unmarshal([]byte(p.Context), &got); err != nil {
+		t.Fatal(err)
+	}
 	if _, ok := navigateGet(got, "user_context.todo"); ok {
 		t.Fatal("key still present after unset")
+	}
+}
+
+func TestSetContextKeyRejectsMalformedPath(t *testing.T) {
+	conn := setupContextTestDB(t)
+	for _, p := range []string{"", ".", "a.", ".a", "a..b"} {
+		if err := SetContextKey(conn, "p1", p, "v"); err == nil {
+			t.Fatalf("SetContextKey(%q) should reject malformed path", p)
+		}
+	}
+}
+
+func TestGetContextKeyRejectsEmptyPath(t *testing.T) {
+	conn := setupContextTestDB(t)
+	if _, err := GetContextKey(conn, "p1", "", ""); err == nil {
+		t.Fatal("GetContextKey(\"\") should error")
+	}
+}
+
+func TestUnsetContextKeyRejectsEmptyPath(t *testing.T) {
+	conn := setupContextTestDB(t)
+	if err := UnsetContextKey(conn, "p1", ""); err == nil {
+		t.Fatal("UnsetContextKey(\"\") should error")
 	}
 }
 

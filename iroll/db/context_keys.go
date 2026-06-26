@@ -20,6 +20,29 @@ func parseJSONOrText(s string) (interface{}, error) {
 	return s, nil
 }
 
+// validateContextPath rejects empty paths and paths with empty segments
+// (leading/trailing dots or consecutive dots), which would otherwise target
+// the "" key or behave unexpectedly. The navigate helpers stay pure;
+// validation lives at the CRUD boundary.
+func validateContextPath(path string) error {
+	if path == "" || strings.Contains(path, "..") || strings.HasPrefix(path, ".") || strings.HasSuffix(path, ".") {
+		return fmt.Errorf("invalid context path %q", path)
+	}
+	return nil
+}
+
+// loadRawContext parses the page's raw context into a map. An empty or "null"
+// context yields an empty map, so a brand-new page can receive keys.
+func loadRawContext(p *Page) (map[string]interface{}, error) {
+	m := map[string]interface{}{}
+	if strings.TrimSpace(p.Context) != "" && p.Context != "null" {
+		if err := json.Unmarshal([]byte(p.Context), &m); err != nil {
+			return nil, fmt.Errorf("parse page context as JSON: %w", err)
+		}
+	}
+	return m, nil
+}
+
 // navigateGet walks a dot-separated path through nested map[string]interface{} values.
 // Returns (value, true) if the full path exists, (nil, false) otherwise.
 func navigateGet(m map[string]interface{}, path string) (interface{}, bool) {
@@ -83,6 +106,9 @@ func navigateUnset(m map[string]interface{}, path string) bool {
 // resolution and loop injection) then navigates to path. irollPath is the iroll package
 // root directory, used only to resolve @file markers.
 func GetContextKey(db *sql.DB, pageID, path, irollPath string) (interface{}, error) {
+	if err := validateContextPath(path); err != nil {
+		return nil, err
+	}
 	p, err := GetPageByPageID(db, pageID)
 	if err != nil {
 		return nil, err
@@ -105,15 +131,16 @@ func GetContextKey(db *sql.DB, pageID, path, irollPath string) (interface{}, err
 // SetContextKey parses rawValue (json-or-text), then reads-modifies-writes the page's
 // raw context, setting the leaf at path. @file/@sql markers on other keys are preserved.
 func SetContextKey(db *sql.DB, pageID, path, rawValue string) error {
+	if err := validateContextPath(path); err != nil {
+		return err
+	}
 	p, err := GetPageByPageID(db, pageID)
 	if err != nil {
 		return err
 	}
-	m := map[string]interface{}{}
-	if strings.TrimSpace(p.Context) != "" && p.Context != "null" {
-		if err := json.Unmarshal([]byte(p.Context), &m); err != nil {
-			return fmt.Errorf("parse page context as JSON: %w", err)
-		}
+	m, err := loadRawContext(p)
+	if err != nil {
+		return err
 	}
 	value, err := parseJSONOrText(rawValue)
 	if err != nil {
@@ -124,21 +151,22 @@ func SetContextKey(db *sql.DB, pageID, path, rawValue string) error {
 	if err != nil {
 		return fmt.Errorf("marshal context: %w", err)
 	}
-	_, err = db.Exec("UPDATE pages SET context = ?, updated_at = ? WHERE page_id = ?", string(out), nowISO(), pageID)
+	_, err = UpdatePageContext(db, pageID, string(out))
 	return err
 }
 
 // UnsetContextKey reads-modifies-writes the page's raw context, removing the leaf at path.
 func UnsetContextKey(db *sql.DB, pageID, path string) error {
+	if err := validateContextPath(path); err != nil {
+		return err
+	}
 	p, err := GetPageByPageID(db, pageID)
 	if err != nil {
 		return err
 	}
-	m := map[string]interface{}{}
-	if strings.TrimSpace(p.Context) != "" && p.Context != "null" {
-		if err := json.Unmarshal([]byte(p.Context), &m); err != nil {
-			return fmt.Errorf("parse page context as JSON: %w", err)
-		}
+	m, err := loadRawContext(p)
+	if err != nil {
+		return err
 	}
 	if !navigateUnset(m, path) {
 		return fmt.Errorf("context key %q: %w", path, ErrContextKeyNotFound)
@@ -147,6 +175,6 @@ func UnsetContextKey(db *sql.DB, pageID, path string) error {
 	if err != nil {
 		return fmt.Errorf("marshal context: %w", err)
 	}
-	_, err = db.Exec("UPDATE pages SET context = ?, updated_at = ? WHERE page_id = ?", string(out), nowISO(), pageID)
+	_, err = UpdatePageContext(db, pageID, string(out))
 	return err
 }
