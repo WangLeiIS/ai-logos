@@ -114,7 +114,8 @@ INSERT INTO pages (page_id, cwd, context, created_at, updated_at) VALUES
         '{' ||
             '"system_prompt":{"@sql":"SELECT value FROM inner.metadata WHERE key = ''system_prompt''"},' ||
             '"response_contract":{"@sql":"SELECT value FROM inner.metadata WHERE key = ''response_contract''"},' ||
-            '"dna":{"@sql":"SELECT name, type, weight, question, answer FROM inner.dna ORDER BY weight DESC"}' ||
+            '"dna":{"@sql":"SELECT name, type, weight, question, answer FROM inner.dna ORDER BY weight DESC"},' ||
+            '"user_context":{}' ||
         '}',
         datetime('now'),
         datetime('now')
