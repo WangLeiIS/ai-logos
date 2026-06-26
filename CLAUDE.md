@@ -33,7 +33,7 @@ logos status
 ./logos page new my-agent --cwd .
 
 # Get agent context
-./logos page get-context --cwd .
+./logos page get --cwd .
 ```
 
 ### irollhub (HTTP Service)
@@ -136,7 +136,7 @@ for attempt := 0; ; attempt++ {
 
 ### Context Resolution
 
-When reading context, `@file` and `@sql` references are resolved to actual values. When writing, raw markers are stored. The `loop` field is dynamically injected by `BuildLoopContext()` during `get-context` operations.
+When reading context, `@file` and `@sql` references are resolved to actual values. When writing, raw markers are stored. The `loop` field is dynamically injected during `page get` operations.
 
 ### Loop Run Lifecycle
 
