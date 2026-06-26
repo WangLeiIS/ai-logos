@@ -144,10 +144,9 @@ func newLoopRestoreCmd(run func(string, string) error) *cobra.Command {
 
 func outputLoopList(cwd string, includeArchived bool, stats bool) error {
 	if stats {
-		seeds, err := runLoopListStats(cwd, includeArchived)
+		seeds, err := runLoopListStats(cwd)
 		if err != nil {
 			outputFail(ErrCodeInternal, err.Error(), nil)
-			return nil
 		}
 		outputOK(seeds, []Hint{
 			{Action: "Start a loop run from an available seed", Cmd: "logos loop run <seed-name>"},
@@ -158,7 +157,6 @@ func outputLoopList(cwd string, includeArchived bool, stats bool) error {
 	seeds, err := runLoopList(cwd, includeArchived)
 	if err != nil {
 		outputFail(ErrCodeInternal, err.Error(), nil)
-		return nil
 	}
 	hints := []Hint{}
 	if len(seeds) > 0 {
@@ -175,7 +173,7 @@ func outputLoopList(cwd string, includeArchived bool, stats bool) error {
 	return nil
 }
 
-func runLoopListStats(cwd string, includeArchived bool) ([]db.AvailableLoopSeed, error) {
+func runLoopListStats(cwd string) ([]db.AvailableLoopSeed, error) {
 	_, _, conn, err := openActiveLoop(cwd)
 	if err != nil {
 		return nil, err
@@ -188,7 +186,6 @@ func outputLoopInspect(cwd, name string) error {
 	seed, err := runLoopInspect(cwd, name)
 	if err != nil {
 		outputFail(ErrCodeInternal, err.Error(), nil)
-		return nil
 	}
 	outputOK(seed, []Hint{
 		{Action: "Start a loop run from this seed", Cmd: fmt.Sprintf("logos loop run %s", name)},
@@ -202,7 +199,6 @@ func outputLoopAdd(cwd, name, seedType, describe, content string, weight float64
 	seed, err := runLoopAdd(cwd, name, seedType, describe, content, weight)
 	if err != nil {
 		outputFail(ErrCodeInternal, err.Error(), nil)
-		return nil
 	}
 	outputOK(seed, []Hint{
 		{Action: "Start a loop run from the new seed", Cmd: fmt.Sprintf("logos loop run %s", name)},
@@ -215,7 +211,6 @@ func outputLoopEdit(cwd, name string, patch db.LoopSeedPatch) error {
 	seed, err := runLoopEdit(cwd, name, patch)
 	if err != nil {
 		outputFail(ErrCodeInternal, err.Error(), nil)
-		return nil
 	}
 	outputOK(seed, []Hint{
 		{Action: "Start a loop run from the updated seed", Cmd: fmt.Sprintf("logos loop run %s", name)},
@@ -227,7 +222,6 @@ func outputLoopEdit(cwd, name string, patch db.LoopSeedPatch) error {
 func outputLoopRemove(cwd, name string) error {
 	if err := runLoopRemove(cwd, name); err != nil {
 		outputFail(ErrCodeInternal, err.Error(), nil)
-		return nil
 	}
 	outputOK(map[string]string{"removed": name}, []Hint{
 		{Action: "List remaining loop seeds", Cmd: "logos loop list"},
@@ -240,7 +234,6 @@ func outputLoopArchive(cwd, name string) error {
 	seed, err := runLoopArchive(cwd, name)
 	if err != nil {
 		outputFail(ErrCodeInternal, err.Error(), nil)
-		return nil
 	}
 	outputOK(seed, []Hint{
 		{Action: "List seeds including archived", Cmd: "logos loop list --archived"},
@@ -253,7 +246,6 @@ func outputLoopRestore(cwd, name string) error {
 	seed, err := runLoopRestore(cwd, name)
 	if err != nil {
 		outputFail(ErrCodeInternal, err.Error(), nil)
-		return nil
 	}
 	outputOK(seed, []Hint{
 		{Action: "Start a loop run from the restored seed", Cmd: fmt.Sprintf("logos loop run %s", name)},
