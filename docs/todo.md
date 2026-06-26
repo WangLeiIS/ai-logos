@@ -4,7 +4,7 @@
 
 ## 第一阶段：冻结协议
 
-- [x] 冻结 .iroll 格式 — 表结构、context 格式、Resources 目录规范确定后不再轻易变更
+- [x] 冻结 .iroll 格式 — 表结构、context 格式、Resources 目录规范确定后不再轻易变更（注：后续格式已演进，见下方「已上线」，schema_version=2）
 - [x] 补齐 loop CLI — seed CRUD、run 生命周期、动态 context、页面删除清理均已完成
 - [x] memory 重构 — 表结构增加 name/question/page_id 列（参考 dna Q&A），去掉 add-memory CLI，为未来 context 压缩写入预留 DB API，补齐 query-memory CLI
 - [x] memory 页面隔离 — memory 按 `page_id` 写入和查询
@@ -39,9 +39,24 @@ irollhub 是产品本身，CLI 只是运行时。
 1. 冻结 `.iroll` v1 协议，并增加明确的 schema version 校验。
 2. 制作并真实使用一个 demo `.iroll`，优先验证 dna、loop、memory、book、skill 的组合体验。
 3. ~~将 Logos CLI 接入 irollhub，完成包的发现、下载和发布闭环。~~ ✅ 已完成
-4. 根据真实使用反馈再决定 forget、context 压缩和前端的优先级。
+4. 根据真实使用反馈再决定 forget、context 压缩的优先级（前端已上线，见「已上线」）。
 
 暂不在 Logos 内实现 loop 自动调度。Agent 自主决定做什么，Logos 只管理上下文和生命记录。
+
+## 已上线（roadmap 之外的重大交付）
+
+下列能力已实际落地，但未单独列在上方的路线图中，在此集中记录：
+
+- DB inner/outer 拆分 — `ai_roll.db`（inner，per-package）与外部工作区分离
+- 三段式 JSON 输出 — `page` / `loop` / `evolving` / `query-dna` / `memory` 采用结构化三段式输出（book/status/skill/roll* 仍保持原格式）
+- page 命令重组 — `get` / `set` / `unset` / `alias` / `query` / `default`（旧的 context 读取/写入命令、current 子命令等已删除或合并）
+- loop 全命令 + `type` — flat 命令（.../run/update/complete/abort/reflect/ps/history/show）并支持 `type`（auto/normal）
+- skill CLI — 命令行接口 + 构建期注册
+- book CLI — Book Bundle 命令行接口
+- MIGRATE OUTER — Irollfile 指令，将 inner DB 迁出为 outer
+- query-dna / query-memory — DNA 与 memory 的查询命令
+- page alias / default 机制 — 页面别名与默认页
+- irollhub 接入 — `login`/`logout`/`push`/`pull`/`search` + `irollhub-web/` React 前端（浏览、搜索、包详情）
 
 
 meeting？
