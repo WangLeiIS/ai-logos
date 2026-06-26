@@ -3,7 +3,6 @@ package db
 import (
 	"database/sql"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"time"
@@ -21,7 +20,7 @@ type HistoryEntry struct {
 }
 
 func ExecuteSQL(db *sql.DB, sqlPath string) error {
-	content, err := ioutil.ReadFile(sqlPath)
+	content, err := os.ReadFile(sqlPath)
 	if err != nil {
 		return fmt.Errorf("read sql file: %w", err)
 	}

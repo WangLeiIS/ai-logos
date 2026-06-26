@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"time"
@@ -234,7 +233,7 @@ func processFrom(tmpDir string, baseTag string) (string, error) {
 	}
 
 	ljPath := filepath.Join(tmpDir, "layer.json")
-	if data, err := ioutil.ReadFile(ljPath); err == nil {
+	if data, err := os.ReadFile(ljPath); err == nil {
 		var lj LayerJSON
 		if json.Unmarshal(data, &lj) == nil {
 			return lj.LayerID, nil
