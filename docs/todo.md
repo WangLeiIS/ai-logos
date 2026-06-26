@@ -47,7 +47,7 @@ irollhub 是产品本身，CLI 只是运行时。
 
 下列能力已实际落地，但未单独列在上方的路线图中，在此集中记录：
 
-- DB inner/outer 拆分 — `ai_roll.db`（inner，per-package）与外部工作区分离
+- DB inner/outer 拆分 — `roll-inner.db`（只读蓝图，per-package）与 `roll-outer.db`（模板，per-cwd 复制）分离
 - 三段式 JSON 输出 — `page` / `loop` / `evolving` / `query-dna` / `memory` 采用结构化三段式输出（book/status/skill/roll* 仍保持原格式）
 - page 命令重组 — `get` / `set` / `unset` / `alias` / `query` / `default`（旧的 context 读取/写入命令、current 子命令等已删除或合并）
 - loop 全命令 + `type` — flat 命令（.../run/update/complete/abort/reflect/ps/history/show）并支持 `type`（auto/normal）
