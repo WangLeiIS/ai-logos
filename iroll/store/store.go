@@ -38,10 +38,6 @@ func InnerDbPath(name string, version string) (string, error) {
 	return safepath.Join(root, "roll-inner.db")
 }
 
-// Deprecated: use InnerDbPath
-func DbPath(name string, version string) (string, error) {
-	return InnerDbPath(name, version)
-}
 
 // WorkspaceOuterDbPath returns the outer db path for default workspace pages.
 func WorkspaceOuterDbPath(name, version string) (string, error) {

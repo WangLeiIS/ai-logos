@@ -151,7 +151,7 @@ func TestEvolvingEndToEndInsertAndSelect(t *testing.T) {
 	}()
 
 	name, version := resolveEvolvingTarget(nil)
-	dbPath, err := store.DbPath(name, version)
+	dbPath, err := store.InnerDbPath(name, version)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -193,7 +193,7 @@ func TestEvolvingEndToEndDryRun(t *testing.T) {
 	}()
 
 	name, version := resolveEvolvingTarget(nil)
-	dbPath, err := store.DbPath(name, version)
+	dbPath, err := store.InnerDbPath(name, version)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -233,7 +233,7 @@ func TestEvolvingEndToEndJSONOutputFormat(t *testing.T) {
 	}()
 
 	name, version := resolveEvolvingTarget(nil)
-	dbPath, err := store.DbPath(name, version)
+	dbPath, err := store.InnerDbPath(name, version)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -270,7 +270,7 @@ func TestEvolvingInvalidSQLReturnsError(t *testing.T) {
 	}()
 
 	name, version := resolveEvolvingTarget(nil)
-	dbPath, err := store.DbPath(name, version)
+	dbPath, err := store.InnerDbPath(name, version)
 	if err != nil {
 		t.Fatal(err)
 	}

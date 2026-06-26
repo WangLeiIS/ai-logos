@@ -102,10 +102,6 @@ func checkedIrollPath(name string, version string) string {
 	return path
 }
 
-// Deprecated: use checkedInnerPath or openOuterFromActive.
-func checkedDbPath(name string, version string) string {
-	return checkedInnerPath(name, version)
-}
 
 func checkedInnerPath(name, version string) string {
 	path, err := store.InnerDbPath(name, version)
