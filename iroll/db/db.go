@@ -240,7 +240,7 @@ func pageNotFound(pageID string) error {
 
 // ResolveContext parses a raw context JSON string and resolves @file and @sql references.
 // irollPath is the root directory of the iroll package (e.g. ~/.iroll/my-agent/).
-// db is the opened ai_roll.db connection for SQL queries.
+// db is the opened database connection for SQL queries (outer with inner attached, or inner standalone).
 func ResolveContext(rawContext string, irollPath string, db *sql.DB, pageID string) (string, error) {
 	var raw map[string]interface{}
 	if err := json.Unmarshal([]byte(rawContext), &raw); err != nil {

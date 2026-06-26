@@ -14,7 +14,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// pageTarget holds the shared page-targeting flags used by the context commands.
+// pageTarget holds the shared page-targeting flags used by page subcommands.
 type pageTarget struct {
 	page, alias, roll, cwd string
 }

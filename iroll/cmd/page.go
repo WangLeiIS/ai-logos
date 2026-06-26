@@ -59,7 +59,7 @@ var pageListCmd = &cobra.Command{
 		name, version, err := builder.ParseTag(args[0])
 		if err != nil {
 			outputFail(ErrCodeInvalidTag, fmt.Sprintf("invalid tag: %v", err), []Hint{
-				{Action: "List all available iroll packages", Cmd: "logos status --list"},
+				{Action: "List all available iroll packages", Cmd: "logos status"},
 			})
 		}
 		innerPath := checkedInnerPath(name, version)
@@ -114,7 +114,7 @@ var pageNewCmd = &cobra.Command{
 		name, version, err := builder.ParseTag(args[0])
 		if err != nil {
 			outputFail(ErrCodeInvalidTag, fmt.Sprintf("invalid tag: %v", err), []Hint{
-				{Action: "List all available iroll packages", Cmd: "logos status --list"},
+				{Action: "List all available iroll packages", Cmd: "logos status"},
 				{Action: "Build an iroll from an Irollfile", Cmd: "logos roll build -f <Irollfile> -t <name>"},
 			})
 		}

@@ -21,7 +21,7 @@ var evolvingCwd string
 
 var evolvingCmd = &cobra.Command{
 	Use:   "evolving [name:version] [sql]",
-	Short: "Execute SQL against an iroll's ai_roll.db",
+	Short: "Execute SQL against an iroll's database",
 	Long: `Execute arbitrary SQL statements against an iroll's external database (with inner database attached).
 	Supports SELECT (returns JSON rows) and mutations (returns affected row count).
 
@@ -35,7 +35,7 @@ func runEvolving(cmd *cobra.Command, args []string) {
 	name, version := resolveEvolvingTarget(args)
 	innerPath := checkedInnerPath(name, version)
 
-	// evolving operates at the ROLL level: the template roll-outer.db + inner.db.
+	// evolving operates at the ROLL level: the template roll-outer.db + roll-inner.db.
 	// It never touches page-level (cwd) live outer databases.
 	templateOuter := filepath.Join(checkedIrollPath(name, version), "roll-outer.db")
 	if _, err := os.Stat(templateOuter); err != nil {

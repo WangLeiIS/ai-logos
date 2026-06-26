@@ -27,7 +27,7 @@ func setupPageQueryTest(t *testing.T) string {
 		t.Fatal(err)
 	}
 
-	// inner.db with schema (keeps the roll well-formed; not opened by page query).
+	// roll-inner.db with schema (keeps the roll well-formed; not opened by page query).
 	innerConn, err := db.Open(filepath.Join(rollRoot, "roll-inner.db"))
 	if err != nil {
 		t.Fatal(err)
