@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Logos is an AI agent state and knowledge management system. It provides a standardized `.iroll` package format (ZIP archive + SQLite database) for storing agent personality, memory, loop behaviors, knowledge, and resources.
+Logos is an AI agent state and knowledge management system. It provides a standardized `.iroll` package format (ZIP archive containing two SQLite databases — `roll-inner.db` and `roll-outer.db` — plus a `Resources/` directory and `layer.json`) for storing agent personality, memory, loop behaviors, knowledge, and resources.
 
 **Core principle: The system doesn't integrate any agent capabilities—agents use us.**
 
@@ -69,34 +69,45 @@ The project consists of two independent Go modules:
 
 **Package Structure:**
 
-- `builder/` - Irollfile layered build system (FROM/MIGRATE/COPY instructions)
+- `builder/` - Irollfile layered build system (FROM/MIGRATE/MIGRATE OUTER/COPY instructions)
 - `book/` - Book Bundle validation and retrieval (Parquet-based knowledge chunks)
 - `cmd/` - Cobra CLI command implementations
-- `db/` - SQLite database operations (pages, memory, dna, loop, loop_runs)
+- `db/` - SQLite database operations across two databases: `roll-inner.db` (read-only blueprint — metadata, dna, loop seeds, skill, book, history) and `roll-outer.db` (template — pages, memory, loop_runs)
 - `store/` - Storage management (~/.iroll/ directory, ZIP extraction)
 - `safepath/` - Path security validation (prevents directory traversal)
 
 **Core Concepts:**
 
-- **iroll Package**: ZIP archive containing `ai_roll.db` and `Resources/` directory. Loaded to `~/.iroll/<name>/`
-- **Page**: Each conversation creates a page, inheriting from template page (page_id=0). Each working directory tracks its active page.
+- **iroll Package**: ZIP archive containing `roll-inner.db`, `roll-outer.db`, `Resources/`, and `layer.json`. `roll-inner.db` is the read-only blueprint written at build time. `roll-outer.db` is the template whose schema is copied per-cwd at runtime (to `<cwd>/.iroll/<name>.db` for a custom cwd, or `~/.iroll/<name>/<version>/workspace/.<name>.outer.db` for the default workspace). At runtime the outer db is opened as the main db with `roll-inner.db` `ATTACH`ed as `inner`; bare table names resolve to outer tables, and the `inner.` prefix reaches inner tables.
+- **Page**: Each conversation creates a page, inheriting from template page (page_id='0'). Each working directory tracks its active page.
 - **Context**: JSON-formatted behavioral instructions supporting three value types:
   - Pure strings: `"key": "value"`
   - File references: `"key": {"@file": "path"}` - reads from iroll package
-  - SQL queries: `"key": {"@sql": "SELECT ..."}` - queries ai_roll.db
+  - SQL queries: `"key": {"@sql": "SELECT ..."}` - run against the attached outer db by default; to read inner blueprint tables (dna/loop seeds/skill/book/history) use the `inner.` prefix (e.g. `SELECT ... FROM inner.loop`).
 - **DNA**: Decision genes via Q&A pairs defining agent's decision mechanism across four dimensions (cognitive, ethical, aesthetic, ontological)
-- **Loop**: Reusable behavior seeds agent can autonomously choose. `loop_runs` stores page-independent execution state. Each page has at most one active main run with optional one-level child runs.
+- **Loop**: The `loop` SEEDS are page-independent (roll-level, stored in `roll-inner.db`). The `loop_runs` table is page-scoped — every row carries a `page_id` — and records per-page execution state. Each page has at most one active main run with optional one-level child runs.
 - **Book Bundle**: Located at `Resources/books/<book-id>/` with manifest.json and three Parquet files. Logos validates and registers at build time; queries use exact tag retrieval with scoring.
 
-**Database Structure (ai_roll.db per iroll):**
-- metadata - key-value metadata
+**Database Structure:**
+
+`roll-inner.db` (read-only blueprint, written at build time):
+- metadata - key-value metadata (includes schema_version=2)
 - dna - decision genes
-- loop - reusable behavior seeds
-- loop_runs - page-specific execution records
-- pages - page contexts
-- memory - page-isolated Q&A memory
+- loop - reusable behavior seeds (roll-level; columns include `type` auto/normal and `describe`)
 - book - Book Bundle metadata
+- skill - skill metadata (discovered/validated/registered at build time)
 - history - build history
+- Template rows in `pages`/`memory`/`loop_runs` where `page_id='0'`
+
+`roll-outer.db` (template — schema copied per-cwd at runtime):
+- pages - page contexts (column includes `alias`)
+- memory - page-isolated Q&A memory
+- loop_runs - page-scoped execution records (every row has `page_id`)
+
+`~/.iroll/system.db` (global registry):
+- page_index - per-cwd/per-iroll page records (carries `iroll_version`, `outer_db_path`, `alias`)
+- active_page - the cwd's currently active page (carries `iroll_version`, `outer_db_path`)
+- config - global configuration
 
 ### 2. irollhub - HTTP Registry Service
 
@@ -136,7 +147,7 @@ for attempt := 0; ; attempt++ {
 
 ### Context Resolution
 
-When reading context, `@file` and `@sql` references are resolved to actual values. When writing, raw markers are stored. The `loop` field is dynamically injected during `page get` operations.
+When reading context, `@file` and `@sql` references are resolved to actual values. When writing, raw markers are stored. At `page new`/`page get` time, `db.ResolveContext` dynamically injects the active loop context as top-level keys `loop_focus` (current run) and `loop_available` (candidate seeds).
 
 ### Loop Run Lifecycle
 
