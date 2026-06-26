@@ -47,7 +47,7 @@ var queryMemoryCmd = &cobra.Command{
 				results = []db.Memory{}
 			}
 			hints := []Hint{
-				{Action: "Get the full page context", Cmd: "logos page get-context"},
+				{Action: "Get the full page context", Cmd: "logos page get"},
 				{Action: "Query memory with a different keyword", Cmd: "logos page query-memory --keyword <keyword>"},
 			}
 			outputOK(results, hints)
@@ -65,7 +65,7 @@ var queryMemoryCmd = &cobra.Command{
 				summaries = []db.MemorySummary{}
 			}
 			hints := []Hint{
-				{Action: "Get the full page context", Cmd: "logos page get-context"},
+				{Action: "Get the full page context", Cmd: "logos page get"},
 				{Action: "Query memory with a keyword for full content", Cmd: "logos page query-memory --keyword <keyword> --full"},
 			}
 			outputOK(summaries, hints)

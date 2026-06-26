@@ -36,12 +36,12 @@ var queryDnaCmd = &cobra.Command{
 		if len(results) > 0 {
 			hints = append(hints, Hint{
 				Action: "Use a DNA answer in your page context",
-				Cmd:    fmt.Sprintf("logos page update-context --page <page-id> --content '{\"dna_answer\":\"%s\"}'", results[0].Answer),
+				Cmd:    fmt.Sprintf("logos page set --page <page-id> dna_answer '{\"answer\":\"%s\"}'", results[0].Answer),
 			})
 		}
 		hints = append(hints, Hint{
 			Action: "Get the full page context including DNA",
-			Cmd:    "logos page get-context",
+			Cmd:    "logos page get",
 		})
 		outputOK(results, hints)
 	},

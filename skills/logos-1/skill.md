@@ -61,7 +61,7 @@ The returned JSON includes `page_id` — you can reference it later if needed.
 ### Step 4: Read context and follow it
 
 ```bash
-logos page get-context --cwd .
+logos page get --cwd .
 ```
 
 The `context` field is a JSON string. Parse it and follow the instructions inside. This is your behavioral blueprint — it tells you how to respond, what persona to adopt, what rules to follow.
@@ -84,7 +84,8 @@ Memory is isolated by page. Summary output omits `content`; add `--full` when th
 When behavioral instructions change during a conversation:
 
 ```bash
-logos page update-context --content '{"system_prompt":"新的指令"}' --cwd .
+logos page set --content '{"system_prompt":"新的指令"}' --cwd .
+logos page set user_context.project blog --cwd .
 ```
 
 The content must be valid JSON. The entire context is replaced, so include all fields.
@@ -146,12 +147,15 @@ Each page has an independent active main run. Child runs use `--parent <main-run
 | `logos roll inspect <name>` | Show iroll details |
 | `logos roll history <name>` | Show build history |
 | `logos page new <name> [--cwd .]` | Create new page |
-| `logos page current [--cwd .]` | Show active page |
 | `logos page list [name] [--cwd .]` | List pages |
 | `logos page switch <page-id>` | Switch active page |
 | `logos page delete <page-id>` | Delete a page |
-| `logos page get-context [name] [--page <id>] [--cwd .]` | Get page context |
-| `logos page update-context [name] --content <json> [--page <id>] [--cwd .]` | Update page context |
+| `logos page get [path] [--page <id>] [--alias <name>] [--cwd .]` | Get full context or a single resolved key |
+| `logos page set <path> <value> [--page <id>] [--cwd .]` | Set a context key (json-or-text) |
+| `logos page set --content '<json>' [--page <id>] [--cwd .]` | Replace the whole context |
+| `logos page unset <path> [--page <id>] [--cwd .]` | Delete a context key |
+| `logos page alias <name> [--page <id>]` | Set/clear page alias |
+| `logos page query [sql] [--sql <stmt>] [--file <p>] [--cwd .]` | Raw SQL on this page's outer db |
 | `logos page query-memory [name] [--keyword <text>] [--min-importance <n>] [--since <ts>] [--before <ts>] [--limit <n>] [--full] [--cwd .]` | Query current-page memories |
 | `logos page query-dna <name> [--type <type>] [--cwd .]` | Fuzzy search dna by name |
 | `logos book list [name] [--cwd .]` | List registered books |
@@ -178,4 +182,4 @@ Each page has an independent active main run. Child runs use `--parent <main-run
 - **memory** — page-scoped Q&A-style experience records with importance and sleep-processing count
 - **book** — a build-validated knowledge bundle under `Resources/books/`; queried using explicit exact tags
 
-When `get-context` or `page new` returns context, `@file` and `@sql` references are already resolved to actual values. When `update-context` writes context, it stores raw JSON with markers — resolution happens at read time.
+When `page get` or `page new` returns context, `@file` and `@sql` references are already resolved to actual values. When `page set` writes context, it stores raw JSON with markers — resolution happens at read time.

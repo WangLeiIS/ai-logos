@@ -117,9 +117,9 @@ Logos 只管理上下文和记录，不执行任务。读取 page context 时会
 | 文件引用 | `"key": {"@file": "path"}` | 相对 iroll 包根目录的文件路径，读取时解析为文件内容 | `"greeting": {"@file": "Resources/greeting.txt"}` |
 | SQL 查询 | `"key": {"@sql": "SELECT ..."}` | SQL 查询语句，读取时解析为查询结果 | `"description": {"@sql": "SELECT value FROM metadata WHERE key = 'description'"}` |
 
-**解析规则：** `@file` 和 `@sql` 在读取时（`get-context`、`page new`）解析为实际值。写入时（`update-context`）存储原始标记，不做解析。
+**解析规则：** `@file` 和 `@sql` 在读取时（`page get`、`page new`）解析为实际值。写入时（`page set`）存储原始标记，不做解析。
 
-**loop 自动注入：** `get-context` 和 `page new` 会自动在 context 中注入一个 `loop` 字段，包含当前页面的循环上下文：
+**loop 自动注入：** `page get` 和 `page new` 会自动在 context 中注入一个 `loop` 字段，包含当前页面的循环上下文：
 
 ```json
 {
@@ -236,12 +236,15 @@ Resources/books/<book-id>/
 | 命令 | 说明 |
 |------|------|
 | `logos page new <name> [--cwd .]` | 创建新页面（继承模板 page_id='0' 的 context，自动设为当前 cwd 的活跃页面） |
-| `logos page current [--cwd .]` | 查看当前活跃页面 |
 | `logos page list [name] [--cwd .] [-a]` | 列出页面。不指定 name 查全局索引，`-a` 查所有 cwd |
 | `logos page switch <page-id>` | 切换活跃页面 |
 | `logos page delete <page-id>` | 删除页面 |
-| `logos page get-context [name] [--page <id>] [--cwd .]` | 获取上下文（返回解析后的实际值） |
-| `logos page update-context [name] --content <json> [--page <id>] [--cwd .]` | 更新上下文（存储原始 JSON 标记） |
+| `logos page get [path] [--page <id>] [--alias <name>] [--cwd .]` | 获取上下文（全量或单键，已解析） |
+| `logos page set <path> <value> [--page <id>] [--cwd .]` | 设置一个 context 键（json-or-text） |
+| `logos page set --content '<json>' [--page <id>] [--cwd .]` | 整体替换 context（存储原始 JSON 标记） |
+| `logos page unset <path> [--page <id>] [--cwd .]` | 删除一个 context 键 |
+| `logos page alias <name> [--page <id>]` | 设置/清除别名 |
+| `logos page query [sql] [--sql <stmt>] [--file <p>] [--cwd .]` | 对当前 page 的 outer 库跑 SQL |
 | `logos page query-memory [name] [--keyword <text>] [--min-importance 0.7] [--since <ts>] [--before <ts>] [--limit 20] [--full] [--cwd .]` | 检索当前 page 的记忆；默认摘要，`--full` 返回完整内容 |
 | `logos page query-dna <name-keyword> [--type <type>] [--cwd .]` | 按名称模糊查询 DNA，可按维度过滤 |
 
@@ -307,7 +310,7 @@ logos loop current|history|show ...
 - [x] CLI 命令体系（status / roll / page / loop / book）
 - [x] context 标准化格式（纯字符串 / @file / @sql 三种值类型，读时解析）
 - [x] 模板页面（page_id='0'）继承机制
-- [x] 页面管理（new / current / list / switch / delete / get-context / update-context / query-dna）
+- [x] 页面管理（new / list / switch / delete / get / set / unset / alias / query / query-dna）
 - [x] 分层构建（FROM / MIGRATE / COPY）
 - [x] 构建历史追踪
 - [x] dna 表（决策 DNA：认知观/伦理观/审美观/本体观）

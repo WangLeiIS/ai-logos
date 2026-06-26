@@ -18,7 +18,6 @@ var pageCmd = &cobra.Command{
 	Short: "Manage pages",
 }
 
-
 var pageListCwd string
 var pageListAll bool
 var pageNewCwd string
@@ -45,13 +44,13 @@ var pageListCmd = &cobra.Command{
 				if pid, ok := pages[0]["page_id"].(string); ok {
 					hints = append(hints, Hint{
 						Action: "Get the full context for the first page listed",
-						Cmd:    fmt.Sprintf("logos page get-context --page %s", pid),
+						Cmd:    fmt.Sprintf("logos page get --page %s", pid),
 					})
 				}
 			}
 			hints = append(hints, Hint{
 				Action: "Create a new page for a fresh context",
-				Cmd: "logos page new <iroll-name>",
+				Cmd:    "logos page new <iroll-name>",
 			})
 			outputOK(pages, hints)
 			return
@@ -96,12 +95,12 @@ var pageListCmd = &cobra.Command{
 		if len(briefs) > 0 {
 			hints = append(hints, Hint{
 				Action: "Get the full context for the first page listed",
-				Cmd:    fmt.Sprintf("logos page get-context --page %s", briefs[0].PageID),
+				Cmd:    fmt.Sprintf("logos page get --page %s", briefs[0].PageID),
 			})
 		}
 		hints = append(hints, Hint{
 			Action: "Create a new page for a fresh context",
-			Cmd: fmt.Sprintf("logos page new %s", args[0]),
+			Cmd:    fmt.Sprintf("logos page new %s", args[0]),
 		})
 		outputOK(briefs, hints)
 	},
@@ -167,8 +166,8 @@ var pageNewCmd = &cobra.Command{
 		}
 
 		hints := []Hint{
-			{Action: "Set an alias for this page, so you can reference it by name later", Cmd: fmt.Sprintf("logos page update-context --page %s --set-alias <name>", p.PageID)},
-			{Action: "Get the full context including DNA, loops and system prompt", Cmd: fmt.Sprintf("logos page get-context --page %s", p.PageID)},
+			{Action: "Set an alias for this page, so you can reference it by name later", Cmd: fmt.Sprintf("logos page alias <name> --page %s", p.PageID)},
+			{Action: "Get the full context including DNA, loops and system prompt", Cmd: fmt.Sprintf("logos page get --page %s", p.PageID)},
 		}
 
 		outputOK(brief, hints)
@@ -190,7 +189,7 @@ var pageSwitchCmd = &cobra.Command{
 			"iroll_name": irollName,
 			"page_id":    pageID,
 		}, []Hint{
-			{Action: "Get the full context of the newly active page", Cmd: fmt.Sprintf("logos page get-context --page %s", pageID)},
+			{Action: "Get the full context of the newly active page", Cmd: fmt.Sprintf("logos page get --page %s", pageID)},
 		})
 	},
 }
@@ -237,7 +236,7 @@ var pageDefaultCmd = &cobra.Command{
 				"status":  "ok",
 				"message": fmt.Sprintf("default page for '%s' set to %s", name, pageID),
 			}, []Hint{
-				{Action: "Get the full context of the new default page", Cmd: fmt.Sprintf("logos page get-context --page %s", pageID)},
+				{Action: "Get the full context of the new default page", Cmd: fmt.Sprintf("logos page get --page %s", pageID)},
 			})
 			return
 		}
@@ -275,7 +274,7 @@ var pageDefaultCmd = &cobra.Command{
 				"iroll":        pageDefaultRoll,
 				"default_page": pageID,
 			}, []Hint{
-				{Action: "Get the full context of the default page", Cmd: fmt.Sprintf("logos page get-context --page %s", pageID)},
+				{Action: "Get the full context of the default page", Cmd: fmt.Sprintf("logos page get --page %s", pageID)},
 				{Action: "Clear the default page setting", Cmd: fmt.Sprintf("logos page default --roll %s --clear", pageDefaultRoll)},
 			})
 			return

@@ -30,7 +30,7 @@ type Page struct {
 }
 
 // PageBrief is a lightweight page representation without context,
-// used for structured CLI output to encourage agent to call get-context.
+// used for structured CLI output to encourage agent to call page get.
 type PageBrief struct {
 	PageID    string `json:"page_id"`
 	Cwd       string `json:"cwd"`

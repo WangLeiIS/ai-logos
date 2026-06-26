@@ -215,7 +215,7 @@ func outputLoopRun(cwd, seedName string, parentRunID *int64, plan string) error 
 	}
 	outputOK(run, []Hint{
 		{Action: "Get the latest loop run details", Cmd: "logos loop ps"},
-		{Action: "Get the page context with active loop focus", Cmd: "logos page get-context"},
+		{Action: "Get the page context with active loop focus", Cmd: "logos page get"},
 	})
 	return nil
 }
@@ -226,7 +226,7 @@ func outputLoopUpdate(cwd string, runID *int64, plan, progress *string) error {
 		outputFail(ErrCodeInternal, err.Error(), nil)
 	}
 	outputOK(run, []Hint{
-		{Action: "Get the page context with active loop focus", Cmd: "logos page get-context"},
+		{Action: "Get the page context with active loop focus", Cmd: "logos page get"},
 	})
 	return nil
 }
