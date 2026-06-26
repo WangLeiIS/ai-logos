@@ -8,7 +8,7 @@ Logos 是一个 AI agent 的状态与知识管理工具。它提供标准化的 
 
 ## 2. 包格式 .iroll
 
-`.iroll` 是一个 ZIP 归档文件，包含两部分：
+`.iroll` 是一个 ZIP 归档文件，包含 `roll-inner.db`、`roll-outer.db`、`Resources/` 和构建元数据 `layer.json`：
 
 ```
 agent.iroll (ZIP)
@@ -16,12 +16,23 @@ agent.iroll (ZIP)
 │   ├── scripts/
 │   ├── skills/
 │   └── books/
-└── ai_roll.db              # SQLite 数据库，包含 agent 的全部记忆和知识
+├── roll-inner.db          # 只读蓝图库（构建时写入）：metadata/dna/loop/skill/book/history + 模板行
+├── roll-outer.db          # 工作库模板：pages/memory/loop_runs 的 schema（运行时按 cwd 复制）
+└── layer.json             # 构建层元数据（layer_id、parent、schema_version 等）
 ```
 
-## 3. 数据库结构 ai_roll.db
+两个数据库的分工见 §3。
 
-数据库分为四个部分，字段不限制，可自由扩展。
+## 3. 数据库结构
+
+`.iroll` 包内有两个 SQLite 数据库，分工不同：
+
+- **`roll-inner.db`（只读蓝图，构建时写入）**：存放 roll 级的稳定定义——`metadata` / `dna` / `loop`（种子）/ `skill` / `book` / `history`，以及 `pages` / `memory` / `loop_runs` 中 `page_id='0'` 的模板行。所有 inner 表通过 `inner.` 前缀访问。
+- **`roll-outer.db`（工作库模板）**：只含 `pages` / `memory` / `loop_runs` 三张表的 schema。加载或 `page new` 时按 cwd 复制一份作为实际工作库：`<cwd>/.iroll/<name>.db`，或默认工作区 `~/.iroll/<name>/<version>/workspace/.<name>.outer.db`。
+
+运行时打开方式：以 outer 为主库，`ATTACH` inner 为 `inner.` schema。裸表名（`pages`/`memory`/`loop_runs`）指向 outer；带 `inner.` 前缀的指向蓝图。因此 `@sql` 引用蓝图表时必须写成 `inner.metadata`、`inner.loop` 等。
+
+字段不限制，可自由扩展。下文按功能划分介绍。
 
 ### 3.1 自我部分
 
@@ -29,8 +40,9 @@ agent.iroll (ZIP)
 |----|------|------|
 | metadata | 是 | key-value 元数据（name, version, description 等） |
 | dna | 否 | agent 的决策 DNA，Q&A 对定义底层决策机制 |
-| loop | 否 | agent 可自主选择的可复用行为种子 |
-| loop_runs | 否 | page 独立的运行状态与生命记录 |
+| loop | 否 | agent 可自主选择的可复用行为种子（roll 级） |
+
+> 以上三张表都在 `roll-inner.db`（蓝图表）。`loop_runs` 虽属「自我」范畴，但属于 page 工作数据，见 §3.2。
 
 **metadata 表结构：**
 
@@ -48,21 +60,22 @@ agent.iroll (ZIP)
 |------|------|------|------|
 | id | INTEGER | PRIMARY KEY AUTOINCREMENT | 主键 |
 | name | TEXT | NOT NULL | 唯一标识，如 `handle-correction` |
-| type | TEXT | NOT NULL | 决策维度：认知观 / 伦理观 / 审美观 / 本体观 |
+| type | TEXT | NOT NULL | 自由字符串，标注这条基因的取向（示例：`idea`、`emotion`），不做枚举约束 |
 | question | TEXT | NOT NULL | 决策困境 |
 | answer | TEXT | NOT NULL | 这个 agent 的选择 |
 | weight | REAL | DEFAULT 0.5 | 权重，越高越核心 |
 | created_at | TEXT | NOT NULL | 创建时间 |
 | updated_at | TEXT | NOT NULL | 更新时间 |
 
-**loop 表结构（循环种子）：**
+**loop 表结构（循环种子，位于 `roll-inner.db`）：**
 
-loop 表定义循环任务的「种子」——即任务的静态定义。每次执行时会创建一条 `loop_runs` 记录，快照种子的 name/describe/content/weight。
+loop 表定义循环任务的「种子」——即任务的静态定义（roll 级，所有 page 共享）。每次执行时在 `loop_runs`（outer）中创建一条记录，快照种子的 name/describe/content/weight。
 
 | 字段 | 类型 | 约束 | 说明 |
 |------|------|------|------|
 | id | INTEGER | PRIMARY KEY AUTOINCREMENT | 主键 |
 | name | TEXT | NOT NULL UNIQUE | 稳定短标识，如 `self-cognition` |
+| type | TEXT | NOT NULL DEFAULT 'normal' CHECK IN ('auto','normal') | `auto` 在 `page new` 时自动启动 run；`normal` 由 agent 主动选择 |
 | describe | TEXT | NOT NULL | 简短描述，如 "自我认知" |
 | content | TEXT | NOT NULL | 完整行为种子 |
 | weight | REAL | 0..1 | agent 选择时的优先级参考 |
@@ -70,17 +83,20 @@ loop 表定义循环任务的「种子」——即任务的静态定义。每次
 | created_at | TEXT | NOT NULL | 创建时间 |
 | updated_at | TEXT | NOT NULL | 更新时间 |
 
-`loop_runs` 是运行事实的唯一来源，包含 `page_id`、可选的一层 `parent_run_id`、种子快照、`plan/progress/result/reflection` 和 `active/completed/aborted` 状态。每个 page 最多一个 active 主 run，不同 page 可以同时运行同一种子。
+`loop_runs` 表存运行事实，包含 `page_id`、可选的一层 `parent_run_id`、种子快照、`plan/progress/result/reflection` 和 `active/completed/aborted` 状态。每个 page 最多一个 active 主 run，不同 page 可以同时运行同一种子。该表 schema 同时存在于 inner（模板行）和 outer（实际运行数据，见 §3.2）。
 
-Logos 只管理上下文和记录，不执行任务。读取 page context 时会动态注入 `loop.focus` 与 `loop.available`，原始 `pages.context` 不保存 loop 运行状态。
+Logos 只管理上下文和记录，不执行任务。读取 page context 时会动态注入顶层键 `loop_focus` 与 `loop_available`，原始 `pages.context` 不保存 loop 运行状态（详见 §3.2）。
 
 ### 3.2 记忆部分
 
 | 表 | 说明 |
 |----|------|
-| memory | 记忆存储 |
-| forget | 遗忘机制（待定义） |
+| memory | 记忆存储（page 隔离） |
 | pages | 页面上下文 |
+| loop_runs | 循环运行记录（page 隔离） |
+| forget | 遗忘机制（未实现，仅 §8 设计提案） |
+
+> 这三张工作表（`memory` / `pages` / `loop_runs`）的 schema 同时存在于 `roll-inner.db`（含 `page_id='0'` 模板行）和 `roll-outer.db`（实际运行时数据）。运行时读写的是 outer 库的副本。
 
 **memory 表结构（参考 dna 表的 Q&A 设计）：**
 
@@ -103,6 +119,7 @@ Logos 只管理上下文和记录，不执行任务。读取 page context 时会
 | id | INTEGER | PRIMARY KEY AUTOINCREMENT | 主键 |
 | page_id | TEXT | NOT NULL | 页面唯一 ID（UUID） |
 | cwd | TEXT | | 工作目录 |
+| alias | TEXT | | 页面别名，可用 `--alias` 引用（见 §5.3） |
 | context | TEXT | NOT NULL | 页面上下文（JSON 格式） |
 | created_at | TEXT | NOT NULL | 创建时间 |
 | updated_at | TEXT | NOT NULL | 更新时间 |
@@ -115,36 +132,32 @@ Logos 只管理上下文和记录，不执行任务。读取 page context 时会
 |------|------|------|------|
 | 纯字符串 | `"key": "value"` | 直接存储字符串值 | `"system_prompt": "你是一个AI助手"` |
 | 文件引用 | `"key": {"@file": "path"}` | 相对 iroll 包根目录的文件路径，读取时解析为文件内容 | `"greeting": {"@file": "Resources/greeting.txt"}` |
-| SQL 查询 | `"key": {"@sql": "SELECT ..."}` | SQL 查询语句，读取时解析为查询结果 | `"description": {"@sql": "SELECT value FROM metadata WHERE key = 'description'"}` |
+| SQL 查询 | `"key": {"@sql": "SELECT ..."}` | SQL 查询语句，读取时解析为查询结果 | `"description": {"@sql": "SELECT value FROM inner.metadata WHERE key = 'description'"}` |
 
-**解析规则：** `@file` 和 `@sql` 在读取时（`page get`、`page new`）解析为实际值。写入时（`page set`）存储原始标记，不做解析。
+**解析规则：** `@file` 和 `@sql` 在读取时（`page get`、`page new`）解析为实际值。写入时（`page set`）存储原始标记，不做解析。`@sql` 默认对 outer 主库执行；要查 inner 蓝图表（如 metadata / dna / loop / skill / book）必须加 `inner.` 前缀，例如 `SELECT value FROM inner.metadata WHERE key = 'description'`。
 
-**loop 自动注入：** `page get` 和 `page new` 会自动在 context 中注入一个 `loop` 字段，包含当前页面的循环上下文：
+**loop 自动注入：** `page get` 和 `page new` 会自动在 context 顶层注入两个键，反映当前页面的循环上下文：
 
 ```json
 {
-  "loop": {
-    "focus": {
-      "main": { "run_id": 1, "seed_name": "self-cognition", "status": "active", "plan": "...", "progress": "..." },
-      "children": []
-    },
-    "available": [
-      { "id": 1, "name": "self-cognition", "describe": "自我认知", "weight": 0.9, "stats": { "active": 0, "completed": 5, "aborted": 0 } },
-      { "id": 2, "name": "daily-check", "describe": "日常检查", "weight": 0.8, "stats": { "active": 0, "completed": 3, "aborted": 0 } }
-    ]
-  }
+  "loop_focus": [
+    { "run_id": 1, "seed_name": "self-cognition", "status": "active", "plan": "...", "progress": "..." }
+  ],
+  "loop_available": [
+    { "id": 2, "name": "daily-check", "describe": "日常检查", "weight": 0.8, "stats": { "active": 0, "completed": 3, "aborted": 0 } }
+  ]
 }
 ```
 
-- `focus`：当前页面活跃的运行（主运行 + 子运行）
-- `available`：所有未归档的种子及其运行统计
+- `loop_focus`：当前页面活跃的运行列表（主运行 + 子运行）
+- `loop_available`：所有未归档且 `type='normal'` 的种子及其运行统计（`type='auto'` 的种子由 `page new` 自动启动，不在可选列表中重复出现）
 
 ### 3.3 知识部分
 
 | 表 | 说明 |
 |----|------|
-| book | 已注册 Book Bundle 的元数据与资源路径 |
-| skill | 技能元数据（构建时从 Resources/skills/ 自动发现并注册） |
+| book | 已注册 Book Bundle 的元数据与资源路径（位于 `roll-inner.db`） |
+| skill | 技能元数据，构建时从 `Resources/skills/` 自动发现并注册（位于 `roll-inner.db`） |
 
 Book Bundle 的内容存储在 `Resources/books/<book-id>/`，SQLite `book` 表仅保存用于列举、检查和定位资源的元数据。每个 Bundle 必须包含：
 
@@ -162,22 +175,32 @@ Resources/books/<book-id>/
 
 | 表 | 说明 |
 |----|------|
-| history | 构建历史（分层构建时自动维护） |
+| history | 构建历史（分层构建时自动维护，位于 `roll-inner.db`） |
 
 ## 4. 工作目录 ~/.iroll/
 
-所有 .iroll 包加载后解压到 `~/.iroll/` 目录下，以包名称为子目录：
+所有 .iroll 包加载后解压到 `~/.iroll/` 目录下，按 `名称/版本` 两级存放：
 
 ```
 ~/.iroll/
-├── system.db              # 全局系统数据库
-├── base-agent/            # 已加载的 iroll 包
-│   ├── Resources/
-│   └── ai_roll.db
+├── system.db                      # 全局系统数据库（page_index / active_page / config）
+├── base-agent/
+│   └── latest/                    # 版本目录（默认 latest；可多版本并存）
+│       ├── Resources/             # 资产目录
+│       ├── roll-inner.db          # 只读蓝图库
+│       ├── roll-outer.db          # 工作库模板
+│       ├── layer.json             # 构建层元数据
+│       └── workspace/             # 默认工作区
+│           └── .base-agent.outer.db   # 该工作区 page 的 outer 库副本
 └── python-expert/
-    ├── Resources/
-    └── ai_roll.db
+    └── latest/
+        ├── Resources/
+        ├── roll-inner.db
+        ├── roll-outer.db
+        └── layer.json
 ```
+
+自定义 cwd 的 page 会把 outer 库复制到 `<cwd>/.iroll/<name>.db`，不走 `workspace/`。
 
 ### 4.1 系统数据库 system.db
 
@@ -185,9 +208,9 @@ Resources/books/<book-id>/
 
 | 表 | 说明 |
 |----|------|
-| page_index | 所有页面的索引（iroll_name, page_id, cwd） |
+| page_index | 所有页面的索引（iroll_name、版本、page_id、cwd、outer 路径、alias） |
 | active_page | 按工作目录追踪活跃页面（每个 cwd 一条记录） |
-| config | 全局配置 key-value |
+| config | 全局配置 key-value（如 `default_page:<name>` 记录每个 iroll 的默认页面，供 `page default` 使用） |
 
 **page_index 表结构：**
 
@@ -195,8 +218,11 @@ Resources/books/<book-id>/
 |------|------|------|------|
 | id | INTEGER | PRIMARY KEY AUTOINCREMENT | 主键 |
 | iroll_name | TEXT | NOT NULL | 所属 iroll 包名 |
+| iroll_version | TEXT | NOT NULL DEFAULT 'latest' | 所属版本 |
 | page_id | TEXT | NOT NULL | 页面 ID |
 | cwd | TEXT | NOT NULL | 工作目录 |
+| outer_db_path | TEXT | NOT NULL DEFAULT '' | 该 page 对应的 outer 库绝对路径 |
+| alias | TEXT | | 页面别名（可空） |
 | created_at | TEXT | NOT NULL | 创建时间 |
 
 **active_page 表结构：**
@@ -206,7 +232,9 @@ Resources/books/<book-id>/
 | id | INTEGER | PRIMARY KEY AUTOINCREMENT | 主键 |
 | cwd | TEXT | NOT NULL UNIQUE | 工作目录（唯一） |
 | iroll_name | TEXT | NOT NULL | 活跃页面所属 iroll 包 |
+| iroll_version | TEXT | NOT NULL DEFAULT 'latest' | 所属版本 |
 | page_id | TEXT | NOT NULL | 活跃页面 ID |
+| outer_db_path | TEXT | NOT NULL DEFAULT '' | 该 page 对应的 outer 库绝对路径 |
 | updated_at | TEXT | NOT NULL | 更新时间 |
 
 ## 5. CLI 命令 logos
@@ -230,6 +258,11 @@ Resources/books/<book-id>/
 | `logos roll save <name> [-o path]` | 将 iroll 打包为 .iroll 文件 |
 | `logos roll inspect <name>` | 查看 iroll 详情（metadata、表统计、资源列表） |
 | `logos roll history <name>` | 查看构建历史 |
+| `logos roll evolving [name:version] [sql]` | 在已存在 iroll 上增量执行 SQL（不重新构建） |
+| `logos roll login [--hub <url>]` / `logos roll logout` | 登录 / 登出 irollhub（换取或清除 API Key） |
+| `logos roll push <file.iroll\|name> <org>/<pkg>:<ver>` | 推送 .iroll 到 irollhub |
+| `logos roll pull <org>/<pkg>[:<ver>] [-o <path>]` | 从 irollhub 拉取 .iroll |
+| `logos roll search <keyword> [--tag <tag>]` | 全文检索 irollhub 上的包 |
 
 ### 5.3 页面管理
 
@@ -239,44 +272,56 @@ Resources/books/<book-id>/
 | `logos page list [name] [--cwd .] [-a]` | 列出页面。不指定 name 查全局索引，`-a` 查所有 cwd |
 | `logos page switch <page-id>` | 切换活跃页面 |
 | `logos page delete <page-id>` | 删除页面 |
-| `logos page get [path] [--page <id>] [--alias <name>] [--cwd .]` | 获取上下文（全量或单键，已解析） |
-| `logos page set <path> <value> [--page <id>] [--cwd .]` | 设置一个 context 键（json-or-text） |
+| `logos page default <page-id>` | 设置某 iroll 的默认页面（写入 `config.default_page:<name>`） |
+| `logos page default --roll <name> [--clear]` | 查看或清除某 iroll 的默认页面 |
+| `logos page get [path] [--page <id>] [--alias <name>] [--roll <tag>] [--cwd .]` | 获取上下文（全量或单键，已解析） |
+| `logos page set <path> <value> [--page <id>] [--alias <name>] [--cwd .]` | 设置一个 context 键（json-or-text） |
 | `logos page set --content '<json>' [--page <id>] [--cwd .]` | 整体替换 context（存储原始 JSON 标记） |
-| `logos page unset <path> [--page <id>] [--cwd .]` | 删除一个 context 键 |
-| `logos page alias <name> [--page <id>]` | 设置/清除别名 |
-| `logos page query [sql] [--sql <stmt>] [--file <p>] [--cwd .]` | 对当前 page 的 outer 库跑 SQL |
+| `logos page unset <path> [--page <id>] [--alias <name>] [--cwd .]` | 删除一个 context 键 |
+| `logos page alias <name> [--page <id>]` | 设置/清除别名（`--clear` 清空） |
+| `logos page query [sql] [--sql <stmt>] [--file <p>] [--alias <name>] [--roll <tag>] [--cwd .]` | 对当前 page 的 outer 库跑 SQL |
 | `logos page query-memory [name] [--keyword <text>] [--min-importance 0.7] [--since <ts>] [--before <ts>] [--limit 20] [--full] [--cwd .]` | 检索当前 page 的记忆；默认摘要，`--full` 返回完整内容 |
-| `logos page query-dna <name-keyword> [--type <type>] [--cwd .]` | 按名称模糊查询 DNA，可按维度过滤 |
+| `logos page query-dna <name-keyword> [--type <type>] [--cwd .]` | 按名称模糊查询 DNA，可按 type 过滤 |
 
-**省略模式：** `page new` 后自动设为活跃页面，后续命令可省略 name 和 --page，自动使用当前 cwd 的活跃页面。
+**定位方式：** 多数命令支持 `--page <id>`、`--alias <name>`、`--roll <org/name:ver>` 或省略（用当前 cwd 活跃页面）四种方式定位目标 page。**省略模式：** `page new` 后自动设为活跃页面，后续命令可省略 name 和 --page，自动使用当前 cwd 的活跃页面。
 
 ### 5.4 分层构建
 
-**Irollfile 指令（仅三条）：**
+**Irollfile 指令（四条，按文件中出现顺序执行）：**
 
 | 指令 | 格式 | 说明 |
 |------|------|------|
-| FROM | `FROM <name>` | 指定基础层（本地 ~/.iroll/ 下已有的包） |
-| MIGRATE | `MIGRATE <file.sql>` | 执行 SQL（建表、改字段、插数据） |
-| COPY | `COPY <src> <dest>` | 复制文件到 Resources/ |
+| FROM | `FROM <name:version>` | 指定基础层（本地 ~/.iroll/ 下已有的包，先把其内容复制到构建临时目录） |
+| MIGRATE | `MIGRATE <file.sql>` | 对 **inner** 库（`roll-inner.db`）执行 SQL（建蓝图表、改字段、插种子/模板数据） |
+| MIGRATE OUTER | `MIGRATE OUTER <file.sql>` | 对 **outer** 库（`roll-outer.db`）执行 SQL（建工作表 schema，如 pages/memory/loop_runs） |
+| COPY | `COPY <src> <dest>` | 复制文件或目录到包内指定位置（通常放在 `Resources/` 下） |
 
-构建完成所有 Irollfile 指令后，会自动发现、校验并注册 `Resources/books/` 下的 Book Bundle。任何无效 Bundle 都会使构建失败。
+指令按 Irollfile 中的书写顺序逐条执行；`FROM` 一般放第一条，后续 `MIGRATE` / `MIGRATE OUTER` / `COPY` 可穿插。构建完成后会自动发现、校验并注册 `Resources/books/` 下的 Book Bundle 与 `Resources/skills/` 下的技能。任何无效 Bundle 或技能都会使构建失败。
 
 ### 5.5 Loop
 
 ```bash
-logos loop list [--archived] [--cwd .]
-logos loop add <name> --describe <text> --content <text> [--weight 0.5] [--cwd .]
-logos loop edit|inspect|remove|archive|restore ...
+logos loop list [--archived] [--stats] [--cwd .]
+logos loop inspect <name> [--cwd .]
+logos loop add <name> --describe <text> --content <text> [--type auto|normal] [--weight 0.5] [--cwd .]
+logos loop edit <name> [--type auto|normal] [--describe <text>] [--content <text>] [--weight 0.5] [--cwd .]
+logos loop remove <name> [--cwd .]            # 仅在无运行历史时可删
+logos loop archive <name> [--cwd .]
+logos loop restore <name> [--cwd .]
 logos loop run <name> [--parent <main-run-id>] [--plan <json-or-text>] [--cwd .]
 logos loop update [run-id] [--plan <value>] [--progress <value>] [--cwd .]
 logos loop complete [run-id] --result <value> [--cwd .]
 logos loop abort [run-id] --reason <text> [--result <value>] [--cwd .]
 logos loop reflect <run-id> --content <value> [--cwd .]
-logos loop current|history|show ...
+logos loop ps [-a] [--cwd .]                   # 列出当前 page 的运行（默认仅 active，-a 含已完成/中止）
+logos loop history <name> [--page <page-id>] [--limit 50] [--cwd .]
+logos loop show <run-id> [--cwd .]
 ```
 
-省略 `update/complete/abort` 的 run ID 时，命令作用于当前 page 的 active 主 run。子 run 必须显式指定。主 run 有 active 子 run 时不能结束。
+- `loop add --type`：`auto` 种子在 `page new` 时自动启动一条 run；`normal`（默认）由 agent 主动 `loop run`。
+- `loop list --stats`：附带每个种子的运行统计（active/completed/aborted 计数）。
+- `loop ps` 替代了早期的 `loop current`，列出当前 page 的运行记录。
+- 省略 `update/complete/abort` 的 run ID 时，命令作用于当前 page 的 active 主 run。子 run 必须显式指定。主 run 有 active 子 run 时不能结束。
 
 ### 5.6 知识书籍
 
@@ -305,26 +350,26 @@ logos loop current|history|show ...
 
 ### 已完成
 
-- [x] .iroll 包格式定义（ZIP + SQLite）
-- [x] system.db 全局页面索引 + 按 cwd 追踪活跃页面
-- [x] CLI 命令体系（status / roll / page / loop / book）
-- [x] context 标准化格式（纯字符串 / @file / @sql 三种值类型，读时解析）
+- [x] .iroll 包格式定义（ZIP + 双 SQLite：roll-inner.db / roll-outer.db）
+- [x] system.db 全局页面索引 + 按 cwd 追踪活跃页面（含版本、outer 路径、alias）
+- [x] CLI 命令体系（status / roll / page / loop / book / skill）
+- [x] context 标准化格式（纯字符串 / @file / @sql 三种值类型，读时解析；@sql 查 inner 需 `inner.` 前缀）
 - [x] 模板页面（page_id='0'）继承机制
-- [x] 页面管理（new / list / switch / delete / get / set / unset / alias / query / query-dna）
-- [x] 分层构建（FROM / MIGRATE / COPY）
+- [x] 页面管理（new / list / switch / delete / default / get / set / unset / alias / query / query-dna）
+- [x] 分层构建（FROM / MIGRATE / MIGRATE OUTER / COPY 四条指令，按文件顺序执行）
 - [x] 构建历史追踪
-- [x] dna 表（决策 DNA：认知观/伦理观/审美观/本体观）
-- [x] loop 种子、page 独立 loop_runs、动态 context 与 CLI
+- [x] dna 表（决策 DNA，type 为自由字符串）
+- [x] loop 种子（含 type=auto/normal）、page 独立 loop_runs、动态 context 注入（loop_focus / loop_available）与 CLI（含 `loop ps`）
 - [x] memory 重构、page 隔离与 query-memory CLI
 - [x] 路径安全校验（iroll 名称、资源路径、ZIP 解压、符号链接）
 - [x] Book Bundle v1（Parquet 校验、构建注册、多书标签检索）
+- [x] skill 表 + Resources/skills/ 技能管理（构建时发现、校验、注册，skill list/show CLI）
+- [x] irollhub 接入（roll login / logout / push / pull / search）
 
 ### 待做
 
-- [ ] 遗忘表定义 + 实现
-- [x] skill 表 + Resources/skills/ 技能管理（构建时发现、校验、注册，CLI 查询）
-- [ ] context 压缩写入 memory
-- [ ] Logos CLI 接入 irollhub
+- [ ] 遗忘表定义 + 实现（见 §8）
+- [ ] context 压缩写入 memory（见 §8）
 - [ ] 前端界面
 
 ## 8. 记忆生命周期
