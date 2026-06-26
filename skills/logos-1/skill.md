@@ -5,8 +5,12 @@ description: |
   Invoke this skill whenever you need to persist conversation context, load an agent's personality,
   create a new memory page, or interact with .iroll packages. This includes: initializing the logos system,
   building or loading iroll packages, creating/switching/deleting pages, reading page context to determine
-  how to behave, updating context, querying page memories, and querying registered books. Use this skill for
-  ANY task involving logos, iroll, page management, agent memory, knowledge, or persistent context.
+  how to behave, per-key context edits (`page set`/`page unset`), setting page aliases (`page alias`),
+  running raw SQL against a page's outer db (`page query`), querying page memories, recording autonomous
+  loop work (`loop run`/`complete`/`abort`/`reflect`/`ps`/`history`), and querying registered books.
+  Commands that mutate page/loop/dna/memory state emit a three-line JSON output protocol
+  (`{"status":"ok"}` plus optional data plus optional `{"hints":[...]}`); parse accordingly. Use this skill
+  for ANY task involving logos, iroll, page management, agent memory, knowledge, or persistent context.
 ---
 
 # Logos — AI Agent State and Knowledge Management
@@ -54,7 +58,7 @@ If multiple iroll packages exist and the user hasn't specified which one to use,
 logos page new <iroll-name> --cwd .
 ```
 
-This creates a new page and automatically sets it as the active page for the current working directory. The new page inherits its initial context from the template page (page_id=0), which typically contains a `system_prompt` defining the agent's personality and behavior.
+This creates a new page and automatically sets it as the active page for the current working directory. The new page inherits its initial context from the template page (page_id=0), which typically defines the agent's baseline behavior through keys like `system_prompt` (personality/role), `response_contract` (output format), and `dna` (decision genes) — not just `system_prompt`.
 
 The returned JSON includes `page_id` — you can reference it later if needed.
 
@@ -120,12 +124,14 @@ logos book query --book <book-id> --tag <tag> --tag <tag> --cwd .
 
 Use repeated `--book` flags for multi-book search. Do not pass the full natural-language question as a tag unless it is intentionally indexed as one exact tag.
 
+Note: `book` commands still emit the OLD single-line JSON envelope (one JSON document per line), not the three-line `status`/data/`hints` protocol used by `page`/`loop`/`query-dna`/memory. Parse book output differently — there is no leading `{"status":"ok"}` line and no trailing `{"hints":[...]}` line.
+
 ### Choose and record autonomous loop work
 
 Resolved page context includes `loop.focus` for the current page and `loop.available` seeds. Logos never executes loop work; you choose a seed, perform the work yourself, and use commands to record progress.
 
 ```bash
-logos loop current --cwd .
+logos loop ps --cwd .
 logos loop run <name> --plan '{"steps":["first step"]}' --cwd .
 logos loop update --progress '{"completed":["first step"]}' --cwd .
 logos loop complete --result '{"summary":"done"}' --cwd .
@@ -146,34 +152,46 @@ Each page has an independent active main run. Child runs use `--parent <main-run
 | `logos roll save <name> [-o path]` | Export iroll to .iroll file |
 | `logos roll inspect <name>` | Show iroll details |
 | `logos roll history <name>` | Show build history |
+| `logos roll evolving [name] [--cwd .]` | Show evolving (uncommitted) changes for an iroll |
 | `logos page new <name> [--cwd .]` | Create new page |
 | `logos page list [name] [--cwd .]` | List pages |
 | `logos page switch <page-id>` | Switch active page |
 | `logos page delete <page-id>` | Delete a page |
-| `logos page get [path] [--page <id>] [--alias <name>] [--cwd .]` | Get full context or a single resolved key |
-| `logos page set <path> <value> [--page <id>] [--cwd .]` | Set a context key (json-or-text) |
-| `logos page set --content '<json>' [--page <id>] [--cwd .]` | Replace the whole context |
-| `logos page unset <path> [--page <id>] [--cwd .]` | Delete a context key |
-| `logos page alias <name> [--page <id>]` | Set/clear page alias |
-| `logos page query [sql] [--sql <stmt>] [--file <p>] [--cwd .]` | Raw SQL on this page's outer db |
+| `logos page default set <name> [--cwd .]` | Set the cwd's default iroll |
+| `logos page default show [--cwd .]` | Show the cwd's default iroll |
+| `logos page default clear [--cwd .]` | Clear the cwd's default iroll |
+| `logos page get [path] [--page <id>] [--alias <name>] [--roll <name>] [--cwd .]` | Get full context or a single resolved key |
+| `logos page set <path> <value> [--page <id>] [--alias <name>] [--roll <name>] [--cwd .]` | Set a context key (json-or-text) |
+| `logos page set --content '<json>' [--page <id>] [--alias <name>] [--roll <name>] [--cwd .]` | Replace the whole context |
+| `logos page unset <path> [--page <id>] [--alias <name>] [--roll <name>] [--cwd .]` | Delete a context key |
+| `logos page alias <name> [--page <id>] [--clear]` | Set/clear page alias |
+| `logos page query [sql] [--sql <stmt>] [--file <p>] [--page <id>] [--alias <name>] [--dry-run] [--cwd .]` | Raw SQL on this page's outer db |
 | `logos page query-memory [name] [--keyword <text>] [--min-importance <n>] [--since <ts>] [--before <ts>] [--limit <n>] [--full] [--cwd .]` | Query current-page memories |
 | `logos page query-dna <name> [--type <type>] [--cwd .]` | Fuzzy search dna by name |
+| `logos skill list [name] [--cwd .]` | List registered skills |
+| `logos skill show <skill-id> [name] [--cwd .]` | Show registered skill metadata/content |
 | `logos book list [name] [--cwd .]` | List registered books |
 | `logos book inspect <book-id> [name] [--cwd .]` | Inspect registered book metadata |
 | `logos book query --book <id>... --tag <tag>... [--limit 10] [--per-book-limit 5] [--cwd .]` | Retrieve original chunks by exact tags |
 | `logos loop list [--archived] [--cwd .]` | List reusable loop seeds |
+| `logos loop inspect <name> [--cwd .]` | Inspect a single loop seed |
 | `logos loop run <name> [--parent <id>] [--plan <value>] [--cwd .]` | Record an autonomous run choice |
 | `logos loop update [run-id] [--plan <value>] [--progress <value>] [--cwd .]` | Replace supplied active-run fields |
-| `logos loop complete|abort|reflect|current|history|show ...` | Manage run lifecycle and life records |
+| `logos loop complete [run-id] --result <value> [--cwd .]` | Complete an active run (`--result` required) |
+| `logos loop abort [run-id] --reason <value> [--cwd .]` | Abort an active run (`--reason` required) |
+| `logos loop reflect <run-id> --content <value> [--replace] [--cwd .]` | Append/replace reflection on a run (positional `<run-id>` + `--content` required) |
+| `logos loop ps [--cwd .]` | Show the current page's run tree (the successor to the deleted `current` subcommand) |
+| `logos loop history <name> [--cwd .]` | Show past runs of a loop seed |
+| `logos loop show [run-id] [--cwd .]` | Show one run in detail |
 
 ## Key Concepts
 
-- **iroll** — a package containing an agent's complete state (database + resources), stored in `~/.iroll/<name>/`
+- **iroll** — a package containing an agent's complete state (two databases + resources), stored in `~/.iroll/<name>/`. The read-only `roll-inner.db` holds the blueprint (metadata/dna/loop seeds/skill/book/history + template rows); the `roll-outer.db` is the template, copied per working directory to `<cwd>/.iroll/<name>.db`. The outer db is opened as the main connection and the inner is ATTACHed AS `inner.` — so any `@sql` reading an inner table MUST prefix it with `inner.` (e.g. `SELECT value FROM inner.metadata WHERE ...`). A bare table name like `metadata` silently hits the outer db, which has no such table.
 - **page** — a conversation session record with context (behavioral JSON) and a link to the memory store
 - **context** — a JSON object stored in a page. Keys are free-form. Values support three types:
   - Plain string: `"system_prompt": "你是一个助手"`
   - File reference: `"greeting": {"@file": "Resources/greeting.txt"}` — reads file content from iroll package
-  - SQL query: `"description": {"@sql": "SELECT value FROM metadata WHERE key = 'description'"}` — queries ai_roll.db
+  - SQL query: `"description": {"@sql": "SELECT value FROM inner.metadata WHERE key = 'description'"}` — queries `roll-inner.db` (note the `inner.` prefix; inner tables are ATTACHed AS `inner.`)
 - **template page** — page_id=0 stores the default context; new pages inherit from it
 - **active page** — each working directory tracks its own active page via system.db
 - **dna** — decision-making Q&A pairs defining agent behavior. Context loads questions only (no answers); use `query-dna` to retrieve full records on demand
