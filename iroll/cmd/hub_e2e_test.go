@@ -14,7 +14,7 @@ import (
 	"logos/store"
 )
 
-// createE2EIrollZip creates a minimal valid .iroll ZIP at path containing ai_roll.db.
+// createE2EIrollZip creates a minimal valid .iroll ZIP at path containing roll-inner.db.
 func createE2EIrollZip(t *testing.T, path string) {
 	t.Helper()
 	f, err := os.Create(path)
@@ -24,12 +24,12 @@ func createE2EIrollZip(t *testing.T, path string) {
 	defer f.Close()
 
 	w := zip.NewWriter(f)
-	out, err := w.Create("ai_roll.db")
+	out, err := w.Create("roll-inner.db")
 	if err != nil {
-		t.Fatalf("create ai_roll.db entry: %v", err)
+		t.Fatalf("create roll-inner.db entry: %v", err)
 	}
 	if _, err := out.Write([]byte("fake-db-content")); err != nil {
-		t.Fatalf("write ai_roll.db: %v", err)
+		t.Fatalf("write roll-inner.db: %v", err)
 	}
 	if err := w.Close(); err != nil {
 		t.Fatalf("close zip writer: %v", err)
@@ -41,12 +41,12 @@ func createE2EIrollZipBytes(t *testing.T) []byte {
 	t.Helper()
 	var buf bytes.Buffer
 	w := zip.NewWriter(&buf)
-	out, err := w.Create("ai_roll.db")
+	out, err := w.Create("roll-inner.db")
 	if err != nil {
-		t.Fatalf("create ai_roll.db entry: %v", err)
+		t.Fatalf("create roll-inner.db entry: %v", err)
 	}
 	if _, err := out.Write([]byte("fake-db-content")); err != nil {
-		t.Fatalf("write ai_roll.db: %v", err)
+		t.Fatalf("write roll-inner.db: %v", err)
 	}
 	if err := w.Close(); err != nil {
 		t.Fatalf("close zip writer: %v", err)
@@ -202,10 +202,10 @@ func TestHubPullDownloadsAndExtracts(t *testing.T) {
 		t.Fatalf("Extract: %v", err)
 	}
 
-	// Verify ai_roll.db exists in the extracted directory.
-	extractedDB := filepath.Join(tmpDir, ".iroll", "pulled-agent", "latest", "ai_roll.db")
+	// Verify roll-inner.db exists in the extracted directory.
+	extractedDB := filepath.Join(tmpDir, ".iroll", "pulled-agent", "latest", "roll-inner.db")
 	if _, err := os.Stat(extractedDB); err != nil {
-		t.Errorf("ai_roll.db not found at %s: %v", extractedDB, err)
+		t.Errorf("roll-inner.db not found at %s: %v", extractedDB, err)
 	}
 }
 

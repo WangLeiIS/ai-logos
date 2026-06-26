@@ -65,7 +65,7 @@ func CwdOuterDbPath(cwd, name string) (string, error) {
 	return safepath.Join(irollDir, name+".db")
 }
 
-// ReadName reads the name value from metadata table inside ai_roll.db within a ZIP file
+// ReadName reads the name value from metadata table inside roll-inner.db within a ZIP file
 func ReadName(zipPath string) (string, error) {
 	r, err := zip.OpenReader(zipPath)
 	if err != nil {
@@ -80,12 +80,12 @@ func ReadName(zipPath string) (string, error) {
 	defer os.RemoveAll(tmpDir)
 
 	for _, f := range r.File {
-		if f.Name == "ai_roll.db" {
+		if f.Name == "roll-inner.db" {
 			rc, err := f.Open()
 			if err != nil {
 				return "", err
 			}
-			outPath := filepath.Join(tmpDir, "ai_roll.db")
+			outPath := filepath.Join(tmpDir, "roll-inner.db")
 			outFile, err := os.Create(outPath)
 			if err != nil {
 				rc.Close()
@@ -114,7 +114,7 @@ func ReadName(zipPath string) (string, error) {
 		}
 	}
 
-	return "", fmt.Errorf("ai_roll.db not found in zip")
+	return "", fmt.Errorf("roll-inner.db not found in zip")
 }
 
 // Extract extracts a .iroll ZIP to ~/.iroll/<name>/<version>/

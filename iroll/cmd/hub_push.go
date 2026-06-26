@@ -169,14 +169,14 @@ func validateIrollZip(zipPath string) error {
 
 	hasDB := false
 	for _, f := range r.File {
-		if f.Name == "ai_roll.db" {
+		if f.Name == "roll-inner.db" {
 			hasDB = true
 			break
 		}
 	}
 
 	if !hasDB {
-		return fmt.Errorf("ai_roll.db not found in package")
+		return fmt.Errorf("roll-inner.db not found in package")
 	}
 
 	return nil

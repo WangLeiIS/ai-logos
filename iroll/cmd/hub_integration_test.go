@@ -84,7 +84,7 @@ func TestValidateIrollZip(t *testing.T) {
 	tmpDir := t.TempDir()
 	testZip := filepath.Join(tmpDir, "test.iroll")
 
-	// 创建有效的测试 ZIP（包含 ai_roll.db）
+	// 创建有效的测试 ZIP（包含 roll-inner.db）
 	err := createTestIrollZip(testZip, true)
 	if err != nil {
 		t.Fatalf("createTestIrollZip failed: %v", err)
@@ -95,7 +95,7 @@ func TestValidateIrollZip(t *testing.T) {
 		t.Errorf("validateIrollZip (valid) failed: %v", err)
 	}
 
-	// 创建无效的测试 ZIP（不包含 ai_roll.db）
+	// 创建无效的测试 ZIP（不包含 roll-inner.db）
 	invalidZip := filepath.Join(tmpDir, "invalid.iroll")
 	err = createTestIrollZip(invalidZip, false)
 	if err != nil {
@@ -119,7 +119,7 @@ func createTestIrollZip(path string, includeDB bool) error {
 	defer zipWriter.Close()
 
 	if includeDB {
-		w, err := zipWriter.Create("ai_roll.db")
+		w, err := zipWriter.Create("roll-inner.db")
 		if err != nil {
 			return err
 		}

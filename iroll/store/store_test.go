@@ -20,7 +20,7 @@ func TestExtractRejectsZipSlip(t *testing.T) {
 
 	archivePath := filepath.Join(t.TempDir(), "malicious.iroll")
 	writeZip(t, archivePath, map[string]string{
-		"ai_roll.db":     "not-a-database",
+		"roll-inner.db":     "not-a-database",
 		"../escaped.txt": "escaped",
 	})
 
@@ -39,7 +39,7 @@ func TestExtractRejectsUnsafeName(t *testing.T) {
 	setTestHome(t)
 
 	archivePath := filepath.Join(t.TempDir(), "valid.iroll")
-	writeZip(t, archivePath, map[string]string{"ai_roll.db": "database"})
+	writeZip(t, archivePath, map[string]string{"roll-inner.db": "database"})
 
 	if err := Extract(archivePath, "../escaped", "latest"); err == nil {
 		t.Fatal("Extract returned nil error for unsafe iroll name")
@@ -51,7 +51,7 @@ func TestExtractValidArchive(t *testing.T) {
 
 	archivePath := filepath.Join(t.TempDir(), "valid.iroll")
 	writeZip(t, archivePath, map[string]string{
-		"ai_roll.db":             "database",
+		"roll-inner.db":             "database",
 		"Resources/greeting.txt": "hello",
 	})
 

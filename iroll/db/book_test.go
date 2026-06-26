@@ -158,7 +158,7 @@ func TestSyncBooksRollsBackAllDeletionsWhenLaterDeleteFails(t *testing.T) {
 
 func openBookTestDB(t *testing.T) *sql.DB {
 	t.Helper()
-	conn, err := sql.Open("sqlite3", filepath.Join(t.TempDir(), "ai_roll.db"))
+	conn, err := sql.Open("sqlite3", filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
